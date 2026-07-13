@@ -92,6 +92,31 @@
       </div>
     </section>
 
+    <section class="view hidden" id="view-task">
+      <button class="back" data-view="tasks">&larr; Back to tasks</button>
+      <div class="card task-detail">
+        <input id="d-title" class="d-title" />
+        <div class="d-meta">
+          <select id="d-priority">
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="d-status">
+            <option value="todo">To do</option>
+            <option value="in_progress">In progress</option>
+            <option value="done">Done</option>
+          </select>
+          <input id="d-due" type="date" />
+        </div>
+        <textarea id="d-notes" class="d-notes" placeholder="Write inside this task…"></textarea>
+        <div class="d-actions">
+          <span class="d-saved" id="d-saved"></span>
+          <button class="btn" id="d-save">Save</button>
+        </div>
+      </div>
+    </section>
+
     <section class="view hidden" id="view-activity">
       <button class="back" data-view="home">&larr; Back</button>
       <div class="card"><div class="rows" id="activity-list"></div></div>

@@ -52,6 +52,7 @@ class Task(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY, default="medium")
     status = models.CharField(max_length=20, choices=STATUS, default="todo")
     deadline = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["deadline", "priority"]

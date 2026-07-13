@@ -122,6 +122,25 @@ body {
   cursor: pointer; padding: 0 4px;
 }
 .task .t-del:hover { color: var(--err); }
+.task .t-title { cursor: pointer; }
+.task:hover { border-color: var(--accent); }
+
+/* Task detail */
+.task-detail { display: flex; flex-direction: column; gap: 16px; }
+.d-title { font-size: 22px; font-weight: 700; border: none; color: var(--ink); font-family: inherit; padding: 4px 0; }
+.d-title:focus { outline: none; border-bottom: 2px solid var(--accent); }
+.d-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+.d-meta select, .d-meta input {
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+  font-size: 14px; font-family: inherit; color: var(--ink);
+}
+.d-notes {
+  min-height: 260px; border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  font-size: 15px; line-height: 1.6; font-family: inherit; color: var(--ink); resize: vertical;
+}
+.d-notes:focus, .d-meta select:focus, .d-meta input:focus { outline: none; border-color: var(--accent); }
+.d-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.d-saved { color: var(--ok); font-size: 14px; font-weight: 600; }
 .prio { width: 8px; height: 8px; border-radius: 50%; }
 .prio.high { background: var(--err); }
 .prio.medium { background: var(--warn); }

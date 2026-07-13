@@ -17,6 +17,7 @@ const TITLES = {
   tasks: ['Tasks', 'What needs doing'],
   activity: ['Activity', 'Recent events'],
   assistant: ['Assistant', 'Local AI over your data'],
+  task: ['Task', 'Open task'],
 };
 
 function show(view) {
@@ -114,8 +115,39 @@ $('#task-list').addEventListener('click', async (e) => {
       body: JSON.stringify({ status }),
     });
   } else {
-    return;
+    return openTask(id);
   }
+  await Promise.all([loadTasks(), load()]);
+});
+
+let currentTask = null;
+
+async function openTask(id) {
+  const t = await api(`/tasks/${id}/`);
+  currentTask = t;
+  $('#d-title').value = t.title;
+  $('#d-priority').value = t.priority;
+  $('#d-status').value = t.status;
+  $('#d-due').value = t.deadline ? t.deadline.slice(0, 10) : '';
+  $('#d-notes').value = t.notes || '';
+  $('#d-saved').textContent = '';
+  show('task');
+}
+
+$('#d-save').addEventListener('click', async () => {
+  if (!currentTask) return;
+  await api(`/tasks/${currentTask.id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: $('#d-title').value.trim(),
+      priority: $('#d-priority').value,
+      status: $('#d-status').value,
+      deadline: $('#d-due').value || null,
+      notes: $('#d-notes').value,
+    }),
+  });
+  $('#d-saved').textContent = 'Saved';
   await Promise.all([loadTasks(), load()]);
 });
 
