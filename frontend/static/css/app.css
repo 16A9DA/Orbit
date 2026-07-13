@@ -87,6 +87,10 @@ body {
 .svc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .svc-name { font-weight: 600; }
 .svc-meta { font-size: 13px; color: var(--muted); }
+.svc-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.svc-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+.svc-row.cost span { color: var(--muted); }
+.svc-row.leak { color: var(--warn, #b45309); display: block; }
 .badge { font-size: 11px; font-weight: 600; text-transform: capitalize; padding: 3px 9px; border-radius: 999px; }
 .badge.operational { color: var(--ok); background: #e6f7ef; }
 .badge.degraded { color: var(--warn); background: #fdf6e3; }

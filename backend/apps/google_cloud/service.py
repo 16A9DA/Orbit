@@ -22,6 +22,7 @@ SERVICE_USAGE_API = "https://serviceusage.googleapis.com/v1"
 CLOUD_BILLING_API = "https://cloudbilling.googleapis.com/v1"
 CLOUD_LOGGING_API = "https://logging.googleapis.com/v2"
 CLOUD_RESOURCE_MANAGER_API = "https://cloudresourcemanager.googleapis.com/v1"
+COMPUTE_API = "https://compute.googleapis.com/compute/v1"
 
 
 
@@ -78,10 +79,16 @@ def collect():
         settings.GCP_PROJECT_ID = project_id
 
     try:
+        cost_by_service = _cost_by_service()
+        instances = _compute_instances()
+
         metadata = {
             "billing_month_usd": _get_billing(),
+            "cost_by_service": cost_by_service,
+            "running_instances": instances["running"],
+            "instances": instances["items"],
             "api_requests_24h": _get_api_usage(),
-            "security_events": _security_events(),
+            "security_events": _security_events(instances["items"]),
             "enabled_apis": _get_enabled_apis(),
             "cost_anomalies": _cost_anomalies(),
             "service_health": _service_health(),
@@ -174,6 +181,83 @@ def _get_billing():
     except Exception as e:
         log.warning("Google billing lookup failed: %s", e, exc_info=True)
         return 0.0
+
+
+def _cost_by_service():
+    """Per-service spend this invoice month, from the billing export table."""
+    try:
+        if not bigquery:
+            return []
+
+        project_id = (
+            getattr(settings, "GCP_BILLING_PROJECT_ID", None)
+            or getattr(settings, "GCP_PROJECT_ID", None)
+            or os.getenv("GCP_PROJECT")
+        )
+        dataset = getattr(settings, "GCP_BILLING_DATASET", None)
+        table = getattr(settings, "GCP_BILLING_TABLE", None)
+
+        if not all([project_id, dataset, table]):
+            return []
+
+        client = bigquery.Client(project=project_id)
+
+        query = f"""
+            SELECT
+              service.description AS service,
+              SUM(cost) AS cost
+            FROM `{project_id}.{dataset}.{table}`
+            WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())
+            GROUP BY service
+            HAVING cost > 0
+            ORDER BY cost DESC
+            LIMIT 20
+        """
+
+        return [
+            {"service": row.service, "cost_usd": round(float(row.cost or 0.0), 2)}
+            for row in client.query(query).result()
+        ]
+
+    except Exception as e:
+        log.warning("Google cost-by-service lookup failed: %s", e, exc_info=True)
+        return []
+
+
+def _compute_instances():
+    """Count Compute Engine instances across all zones."""
+    empty = {"running": 0, "total": 0, "items": []}
+    try:
+        project_id = getattr(settings, "GCP_PROJECT_ID", os.getenv("GCP_PROJECT"))
+
+        r = requests.get(
+            f"{COMPUTE_API}/projects/{project_id}/aggregated/instances",
+            headers=_headers(),
+            timeout=15,
+        )
+        r.raise_for_status()
+
+        items = []
+        for zone, scoped in r.json().get("items", {}).items():
+            for inst in scoped.get("instances", []):
+                external_ip = None
+                for nic in inst.get("networkInterfaces", []):
+                    for cfg in nic.get("accessConfigs", []):
+                        external_ip = cfg.get("natIP") or external_ip
+                items.append({
+                    "name": inst.get("name"),
+                    "zone": zone.replace("zones/", ""),
+                    "status": inst.get("status"),
+                    "machine_type": (inst.get("machineType") or "").rsplit("/", 1)[-1],
+                    "external_ip": external_ip,
+                })
+
+        running = sum(1 for i in items if i["status"] == "RUNNING")
+        return {"running": running, "total": len(items), "items": items}
+
+    except requests.RequestException as e:
+        log.warning("Compute instances lookup failed: %s", e, exc_info=True)
+        return empty
 
 
 def _get_enabled_apis():
@@ -289,18 +373,24 @@ def _recent_errors():
         return []
 
 
-def _security_events():
+def _security_events(instances=None):
     events = []
 
     # Basic API key exposure heuristic.
     api_key = getattr(settings, "GCP_API_KEY", None) or os.getenv("GCP_API_KEY")
 
-    if api_key:
-        if len(api_key) < 20:
-            events.append("Google Cloud API key looks invalid or exposed")
+    if api_key and len(api_key) < 20:
+        events.append("Google Cloud API key looks invalid or exposed")
 
     if not (getattr(settings, "GCP_PROJECT_ID", None) or os.getenv("GCP_PROJECT")):
         events.append("Google Cloud project is not configured")
+
+    # Publicly reachable compute instances are an exposure surface.
+    for inst in instances or []:
+        if inst.get("external_ip"):
+            events.append(
+                f"Instance {inst['name']} ({inst['zone']}) has public IP {inst['external_ip']}"
+            )
 
     return events
 
@@ -308,6 +398,18 @@ def _security_events():
 def _mock():
     metadata = {
         "billing_month_usd": 4.12,
+        "cost_by_service": [
+            {"service": "Compute Engine", "cost_usd": 3.10},
+            {"service": "Cloud Storage", "cost_usd": 0.72},
+            {"service": "BigQuery", "cost_usd": 0.30},
+        ],
+        "running_instances": 2,
+        "instances": [
+            {"name": "web-1", "zone": "us-central1-a", "status": "RUNNING",
+             "machine_type": "e2-small", "external_ip": "34.10.11.12"},
+            {"name": "worker-1", "zone": "us-central1-a", "status": "RUNNING",
+             "machine_type": "e2-micro", "external_ip": None},
+        ],
         "api_requests_24h": 18432,
         "security_events": [],
         "enabled_apis": ["compute.googleapis.com", "storage.googleapis.com", "iam.googleapis.com"],

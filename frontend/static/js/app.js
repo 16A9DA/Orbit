@@ -61,15 +61,30 @@ function renderGithub(latest) {
     </div>`;
 }
 
+function gcpDetail(m) {
+  const rows = [];
+  if (m.billing_month_usd != null)
+    rows.push(`<div class="svc-row"><span>Month spend</span><b>$${Number(m.billing_month_usd).toFixed(2)}</b></div>`);
+  if (m.running_instances != null)
+    rows.push(`<div class="svc-row"><span>Running instances</span><b>${m.running_instances}</b></div>`);
+  (m.cost_by_service || []).slice(0, 5).forEach((c) =>
+    rows.push(`<div class="svc-row cost"><span>${c.service}</span><b>$${Number(c.cost_usd).toFixed(2)}</b></div>`));
+  (m.security_events || []).forEach((e) =>
+    rows.push(`<div class="svc-row leak">⚠ ${e}</div>`));
+  return rows.length ? `<div class="svc-detail">${rows.join('')}</div>` : '';
+}
+
 function renderServices(services) {
   $('#service-grid').innerHTML = services.map((s) => {
-    const meta = Object.entries(s.metadata || {})
-      .filter(([k]) => !['mock', 'id', 'error'].includes(k))
+    const m = s.metadata || {};
+    const meta = Object.entries(m)
+      .filter(([k, v]) => !['mock', 'id', 'error'].includes(k) && typeof v !== 'object')
       .slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    const detail = s.type === 'gcp' ? gcpDetail(m) : '';
     return `<div class="svc">
       <div class="svc-top"><span class="svc-name">${s.name}</span>
       <span class="badge ${s.status}">${s.status}</span></div>
-      <div class="svc-meta">${meta || s.type}</div></div>`;
+      <div class="svc-meta">${meta || s.type}</div>${detail}</div>`;
   }).join('') || '<div class="svc-meta">No services. Hit Refresh.</div>';
 }
 
