@@ -297,18 +297,17 @@ def _get_api_usage():
         now = datetime.utcnow()
         start = now - timedelta(hours=24)
 
-        payload = {
+        # timeSeries.list is a GET with dotted query params, not a POST.
+        params = {
             "filter": 'metric.type="serviceruntime.googleapis.com/api/request_count"',
-            "interval": {
-                "startTime": start.isoformat() + "Z",
-                "endTime": now.isoformat() + "Z",
-            },
+            "interval.startTime": start.isoformat() + "Z",
+            "interval.endTime": now.isoformat() + "Z",
         }
 
-        response = requests.post(
+        response = requests.get(
             f"{GCP_API}/projects/{project_id}/timeSeries",
             headers=_headers(),
-            json=payload,
+            params=params,
             timeout=15,
         )
 
@@ -324,14 +323,20 @@ def _quota_usage():
     try:
         project_id = getattr(settings, "GCP_PROJECT_ID", os.getenv("GCP_PROJECT"))
 
-        payload = {
+        now = datetime.utcnow()
+        start = now - timedelta(hours=24)
+
+        # timeSeries.list is a GET; interval is required or the API returns 400.
+        params = {
             "filter": 'metric.type="serviceruntime.googleapis.com/quota/allocation/usage"',
+            "interval.startTime": start.isoformat() + "Z",
+            "interval.endTime": now.isoformat() + "Z",
         }
 
-        r = requests.post(
+        r = requests.get(
             f"{GCP_API}/projects/{project_id}/timeSeries",
             headers=_headers(),
-            json=payload,
+            params=params,
             timeout=15,
         )
 

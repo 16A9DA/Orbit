@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime, timedelta
 
 import requests
 from django.conf import settings
@@ -27,8 +28,10 @@ def collect():
 
     try:
         h = {"Authorization": f"Bearer {settings.SENDGRID_API_KEY}"}
+        # /stats requires start_date (YYYY-MM-DD); omitting it returns 400.
+        start_date = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
         r = requests.get(f"{API}/stats", headers=h,
-                         params={"aggregated_by": "day", "limit": 7}, timeout=15)
+                         params={"aggregated_by": "day", "start_date": start_date}, timeout=15)
         r.raise_for_status()
         stats = _flatten(r.json())
 
