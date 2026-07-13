@@ -143,20 +143,35 @@ function renderGithubCard(services) {
   const gh = byType(services, 'github')[0];
   const badge = $('#github-badge');
   const body = $('#github-body');
-  if (!gh) { badge.textContent = 'no data'; body.innerHTML = '<div class="row"><span class="sub">No GitHub service.</span></div>'; return; }
-  const m = meta(gh);
-  badge.textContent = gh.status;
-  const repos = m.repos || m.repositories || [];
-  if (repos.length) {
-    body.innerHTML = repos.slice(0, 6).map((r) =>
-      `<div class="gh-repo"><span>${esc(r.name)}</span><span class="c">${esc(r.commits ?? r.language ?? '')}</span></div>`).join('');
-  } else {
-    body.innerHTML = Object.entries(m)
-      .filter(([k, v]) => typeof v !== 'object' && !['id', 'mock'].includes(k))
-      .slice(0, 6).map(([k, v]) => `<div class="gh-repo"><span>${esc(k)}</span><span class="c">${esc(v)}</span></div>`).join('')
-      || '<div class="row"><span class="sub">No data.</span></div>';
+  if (!gh || meta(gh).error) {
+    badge.textContent = gh ? 'error' : 'no data';
+    body.innerHTML = `<div class="row"><span class="sub">${esc(gh ? meta(gh).error : 'No GitHub service.')}</span></div>`;
+    return;
   }
+  const m = meta(gh);
+  const repos = (m.repos || []).slice().sort((a, b) => new Date(b.pushed_at || 0) - new Date(a.pushed_at || 0));
+  badge.textContent = `${m.total_commits ?? repos.reduce((s, r) => s + (r.commits || 0), 0)} commits`;
+  if (!repos.length) {
+    body.innerHTML = '<div class="row"><span class="sub">No repositories.</span></div>';
+    return;
+  }
+  body.innerHTML = repos.map((r) => `
+    <div class="gh-repo" data-repo="${esc(r.full_name)}" style="cursor:pointer">
+      <span>${esc(r.name)}${r.private ? ' <span class="sub">·private</span>' : ''}</span>
+      <span class="c">${r.commits} commits</span>
+    </div>
+    <div class="gh-expand hidden" data-expand="${esc(r.full_name)}">
+      <div class="sub">Last push ${fmtTime(r.pushed_at)}</div>
+      ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" class="sub">${esc(r.full_name)} ↗</a>` : ''}
+    </div>`).join('');
 }
+
+$('#github-body').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-repo]');
+  if (!row || e.target.closest('a')) return;
+  const exp = $(`[data-expand="${row.dataset.repo}"]`);
+  if (exp) exp.classList.toggle('hidden');
+});
 
 function renderBilling(services) {
   const rBill = byType(services, 'render').find((s) => meta(s).monthly_cost != null);
@@ -207,7 +222,7 @@ function renderSuggested(tasks) {
   $('#suggested-list').innerHTML = open.map((t) => `
     <div class="check">
       <span class="box" data-toggle="${t.id}"></span>
-      <span class="txt">${esc(t.title)}</span>
+      <span class="txt" data-open="${t.id}" style="cursor:pointer">${esc(t.title)}</span>
     </div>`).join('') || '<div class="row"><span class="sub">Inbox zero.</span></div>';
 }
 
@@ -215,10 +230,41 @@ function renderMyTasks(tasks) {
   $('#mytasks-list').innerHTML = tasks.map((t) => `
     <div class="check">
       <span class="box ${isDone(t) ? 'done' : ''}" data-toggle="${t.id}">${isDone(t) ? '✓' : ''}</span>
-      <span class="txt ${isDone(t) ? 'done' : ''}">${esc(t.title)}</span>
+      <span class="txt ${isDone(t) ? 'done' : ''}" data-open="${t.id}" style="cursor:pointer">${esc(t.title)}${t.notes ? ' <span class="sub">·notes</span>' : ''}</span>
       <span class="x" data-del="${t.id}">×</span>
     </div>`).join('') || '<div class="row"><span class="sub">No tasks yet.</span></div>';
 }
+
+// ---- Task editor (notion-style: title + body) ----
+let activeTask = null;
+let taskSaveTimer = null;
+
+function openTask(id) {
+  const t = TASKS.find((x) => String(x.id) === String(id));
+  if (!t) return;
+  activeTask = t.id;
+  $$('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === 'tasks'));
+  $('#panel-overview').classList.add('hidden');
+  $('#panel-tasks').classList.remove('hidden');
+  $('#task-editor').classList.remove('hidden');
+  $('#task-title').value = t.title || '';
+  $('#task-body').value = t.notes || '';
+  $('#task-meta').textContent = `${t.priority || 'medium'} · ${t.status || 'todo'}`;
+  $('#task-title').focus();
+}
+
+function saveTask(patch) {
+  const t = TASKS.find((x) => x.id === activeTask);
+  if (!t) return;
+  Object.assign(t, patch);
+  clearTimeout(taskSaveTimer);
+  taskSaveTimer = setTimeout(async () => {
+    try { await api(`/tasks/${activeTask}/`, { method: 'PATCH', body: JSON.stringify(patch) }); } catch (e) { /* ignore */ }
+    renderMyTasks(TASKS); renderSuggested(TASKS);
+  }, 500);
+}
+$('#task-title').addEventListener('input', (e) => saveTask({ title: e.target.value }));
+$('#task-body').addEventListener('input', (e) => saveTask({ notes: e.target.value }));
 
 async function toggleTask(id) {
   const t = TASKS.find((x) => String(x.id) === String(id));
@@ -244,6 +290,8 @@ document.addEventListener('click', (e) => {
   if (tog) return toggleTask(tog.dataset.toggle);
   const del = e.target.closest('[data-del]');
   if (del) return deleteTask(del.dataset.del);
+  const open = e.target.closest('[data-open]');
+  if (open) return openTask(open.dataset.open);
 });
 $('#task-add-btn').addEventListener('click', () => {
   const v = $('#task-input').value.trim();

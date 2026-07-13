@@ -380,6 +380,9 @@ body {
   border-bottom: 0;
 }
 
+.gh-repo:hover { color: var(--accent); }
+.gh-expand { padding: 4px 0 10px 4px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.gh-expand a { color: var(--accent); text-decoration: none; }
 .gh-repo .c {
   font-family: var(--mono);
   color: var(--muted);

@@ -58,7 +58,7 @@ def collect():
                 "latest_deploy": deploy,
             })
             log_activity("render", f"Service {name} status {status}")
-        cost = _fetch_cost(h)
+        cost = _fetch_cost()
         return _finish(cost)
     except requests.RequestException as e:
         log.warning("Render collect failed: %s", e)
@@ -193,7 +193,7 @@ def get_deployment_details(service_id, deploy_id):
         log.warning("Render deployment details lookup failed: %s", e)
         return None
 
-def _fetch_cost(headers):
+def _fetch_cost():
     # Render's public API has no billing endpoint, so the only reliable source
     # of real spend is the RENDER_MONTHLY_COST override. Otherwise unavailable.
     override = getattr(settings, "RENDER_MONTHLY_COST", "")
@@ -206,10 +206,19 @@ def _fetch_cost(headers):
 
 
 def _resolve_stale_billing_alerts():
-    """Clear old render-billing alerts once spend is back within budget."""
+    """Clear old render cost/billing alerts once spend is back within budget.
+
+    Covers both the current 'render_billing' source and legacy 'render'-source
+    cost alerts (older builds), matched by title so genuine leak alerts survive.
+    """
     try:
+        from django.db.models import Q
         from apps.monitoring.models import Alert
-        Alert.objects.filter(source="render_billing", resolved=False).update(resolved=True)
+        (Alert.objects
+         .filter(resolved=False)
+         .filter(Q(source="render_billing") | Q(source="render", title__icontains="cost")
+                 | Q(source="render", title__icontains="usage exceeded"))
+         .update(resolved=True))
     except Exception as e:
         log.warning("Could not resolve stale render alerts: %s", e)
 
