@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Launcher: start the Dashboard server, open browser, run monitoring.
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR/backend"
+python manage.py migrate --noinput >/dev/null
+exec python manage.py dashboard "$@"
