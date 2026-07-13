@@ -182,3 +182,83 @@ def get_github_context(repo=None):
         "latest_commit": latest,
         "recent_commits": history,
     }
+
+
+def get_repository_info(repo):
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        r = requests.get(
+            f"{API}/repos/{repo}",
+            headers=_headers(),
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+
+        return {
+            "name": data.get("full_name"),
+            "description": data.get("description"),
+            "stars": data.get("stargazers_count", 0),
+            "forks": data.get("forks_count", 0),
+            "language": data.get("language"),
+            "default_branch": data.get("default_branch"),
+            "created": data.get("created_at"),
+            "updated": data.get("updated_at"),
+            "url": data.get("html_url"),
+        }
+
+    except requests.RequestException as e:
+        log.warning("Repository info lookup failed: %s", e)
+        return None
+
+
+def get_repository_readme(repo):
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        r = requests.get(
+            f"{API}/repos/{repo}/readme",
+            headers=_headers(),
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+
+        import base64
+        content = data.get("content", "")
+
+        return base64.b64decode(content).decode("utf-8", errors="ignore")
+
+    except requests.RequestException as e:
+        log.warning("README lookup failed: %s", e)
+        return None
+
+
+def get_repository_languages(repo):
+    if not settings.GITHUB_TOKEN:
+        return {}
+
+    try:
+        r = requests.get(
+            f"{API}/repos/{repo}/languages",
+            headers=_headers(),
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    except requests.RequestException as e:
+        log.warning("Language lookup failed: %s", e)
+        return {}
+
+
+def get_repository_context(repo):
+    return {
+        "repository": get_repository_info(repo),
+        "readme": get_repository_readme(repo),
+        "languages": get_repository_languages(repo),
+        "commits": get_commit_history(repo, limit=5),
+    }

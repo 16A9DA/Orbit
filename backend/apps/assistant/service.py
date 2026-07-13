@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.monitoring.models import Activity, Alert, Service, Task
 from apps.notifications.service import send_discord_message
-from apps.github.service import get_github_context
+from apps.github.service import get_github_context, get_repository_context
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +68,13 @@ def _extract_repo_url(question):
 
 def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
     github_context = get_github_context()
+    repository_context = None
+
+    if repo_url:
+        match = re.search(r"github\.com/([\w.-]+/[\w.-]+)", repo_url)
+        if match:
+            repository_context = get_repository_context(match.group(1).rstrip("/"))
+
     context = {
         "services": [f"{s.name} ({s.type}): {s.status}" for s in services],
         "alerts": [f"[{a.severity}] {a.title}" for a in alerts],
@@ -83,6 +90,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         ],
         "repository_url": repo_url,
         "github": github_context,
+        "repository": repository_context,
         "capabilities": [
             "service monitoring",
             "GitHub activity analysis",
