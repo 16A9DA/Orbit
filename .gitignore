@@ -1,6 +1,7 @@
 # Claude / assistant
 CLAUDE.md
 .claude/
+.serena/
 
 # Secrets
 .env
