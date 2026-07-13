@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.monitoring.models import Activity, Alert, Service, Task
 from apps.notifications.service import send_discord_message
 from apps.github.service import get_github_ai_context
+from apps.google_cloud.service import collect as get_google_cloud_context
 from apps.assistant.tools import execute_tool, TOOL_DESCRIPTION
 
 log = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
             repo_name = match.group(1).rstrip("/")
 
     github_context = get_github_ai_context(repo_name)
+    google_cloud_context = get_google_cloud_context()
 
     context = {
         "services": [f"{s.name} ({s.type}): {s.status}" for s in services],
@@ -93,6 +95,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         ],
         "repository_url": repo_url,
         "github": github_context,
+        "google_cloud": google_cloud_context,
         "capabilities": [
             "service monitoring",
             "GitHub activity analysis",
@@ -102,6 +105,12 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
             "repository structure analysis",
             "repository code search",
             "infrastructure questions",
+            "Google Cloud billing monitoring",
+            "Google Cloud API usage monitoring",
+            "Google Cloud enabled API monitoring",
+            "Google Cloud cost anomaly detection",
+            "Google Cloud service health monitoring",
+            "Google Cloud error monitoring",
             "external service information",
             "notifications and integrations when configured",
             "GitHub actions through available tools",
@@ -110,10 +119,10 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
     system = (
         "You are the assistant inside a local infrastructure dashboard. "
         "Answer questions about the application, connected services, integrations, and monitored infrastructure. "
-        "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, repository structure, README content, languages, and code search results. "
+        "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, repository structure, README content, languages, and code search results. You can also analyze Google Cloud billing, enabled APIs, usage, service health, cost anomalies, quotas, and recent errors from the connected Google Cloud context. "
         "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
         "You can help explain external services such as hosting providers, billing plans, APIs, and configuration options when the information is available in the system state. "
-        "For requests that require an action, use available tools when possible. "
+        "For requests that require an action or infrastructure check, use available tools when possible. Use get_google_cloud_context for Google Cloud monitoring questions. "
         "When calling a tool, return only JSON in this format: {\"tool\": \"tool_name\", \"arguments\": {}}. Use GitHub tools for GitHub actions instead of explaining that you cannot access GitHub. "
         "Available tools:\n" + TOOL_DESCRIPTION + "\n"
         "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."

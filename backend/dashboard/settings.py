@@ -109,6 +109,10 @@ GITHUB_USER = os.getenv("GITHUB_USER", "")
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 GCP_API_KEY = os.getenv("GCP_API_KEY", "")
 GCP_PROJECT = os.getenv("GCP_PROJECT", "")
+GCP_SERVICE_ACCOUNT_FILE = os.getenv("GCP_SERVICE_ACCOUNT_FILE", "")
+GCP_BILLING_PROJECT_ID = os.getenv("GCP_BILLING_PROJECT_ID", "")
+GCP_BILLING_DATASET = os.getenv("GCP_BILLING_DATASET", "")
+GCP_BILLING_TABLE = os.getenv("GCP_BILLING_TABLE", "")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")  # fallback / default channel
 

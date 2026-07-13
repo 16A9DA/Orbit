@@ -2,6 +2,7 @@
 import re
 
 
+
 from apps.github.service import (
     create_issue,
     create_branch,
@@ -12,6 +13,7 @@ from apps.github.service import (
     search_repository_code,
     get_repository_tree,
 )
+from apps.google_cloud.service import collect as get_google_cloud_context
 
 
 GITHUB_TOOLS = {
@@ -23,11 +25,18 @@ GITHUB_TOOLS = {
     "get_github_ai_context": get_github_ai_context,
     "search_repository_code": search_repository_code,
     "get_repository_tree": get_repository_tree,
+    "get_google_cloud_context": get_google_cloud_context,
 }
 
 
 TOOL_DESCRIPTION = """
 Available GitHub tools:
+
+get_google_cloud_context:
+Check Google Cloud infrastructure health.
+Returns billing status, API usage, enabled APIs, cost anomalies, service health, quotas, and recent errors.
+Arguments:
+{}
 
 get_repository_context:
 Analyze a GitHub repository.
