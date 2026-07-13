@@ -1,5 +1,4 @@
 import logging
-import re
 
 import base64
 
@@ -11,47 +10,6 @@ from apps.notifications.service import notify
 
 log = logging.getLogger(__name__)
 API = "https://api.github.com"
-
-
-def _repo_commit_count(full_name):
-    """Total commits on the default branch via the Link-header pagination trick."""
-    try:
-        r = requests.get(f"{API}/repos/{full_name}/commits", headers=_headers(),
-                         params={"per_page": 1}, timeout=15)
-        if not r.ok:
-            return 0
-        link = r.headers.get("Link", "")
-        m = re.search(r'[?&]page=(\d+)>;\s*rel="last"', link)
-        if m:
-            return int(m.group(1))
-        # No Link header means a single page: count the returned commits.
-        return len(r.json())
-    except (requests.RequestException, ValueError):
-        return 0
-
-
-def _list_repos(limit=10):
-    """User repos sorted by most recent push, each with a total commit count."""
-    try:
-        r = requests.get(f"{API}/user/repos", headers=_headers(),
-                         params={"sort": "pushed", "per_page": limit, "affiliation": "owner"},
-                         timeout=15)
-        r.raise_for_status()
-        repos = []
-        for repo in r.json():
-            full = repo.get("full_name")
-            repos.append({
-                "name": repo.get("name"),
-                "full_name": full,
-                "commits": _repo_commit_count(full),
-                "pushed_at": repo.get("pushed_at"),
-                "url": repo.get("html_url"),
-                "private": repo.get("private", False),
-            })
-        return repos
-    except requests.RequestException as e:
-        log.warning("GitHub repo listing failed: %s", e)
-        return []
 
 
 def _headers():
@@ -115,12 +73,9 @@ def collect():
                     failed += 1
                     notify("critical", f"Failed GitHub Action on {repo}",
                            "A workflow run concluded with failure.", source="github")
-        repos = _list_repos()
-        total_commits = sum(r["commits"] for r in repos)
         upsert_service("GitHub", "github", "operational",
-                       {"commits": commits, "prs": prs, "failed_actions": failed,
-                        "repos": repos, "total_commits": total_commits})
-        return {"commits": commits, "prs": prs, "failed_actions": failed, "repos": repos}
+                       {"commits": commits, "prs": prs, "failed_actions": failed})
+        return {"commits": commits, "prs": prs, "failed_actions": failed}
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:
             msg = f"GitHub user '{settings.GITHUB_USER}' not found. Check GITHUB_USER."
