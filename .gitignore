@@ -1,0 +1,38 @@
+# Claude / assistant
+CLAUDE.md
+.claude/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets*
+*.secret
+*.credentials
+
+# Antigravity planning artifacts
+implementation_plan.md
+task.md
+system_architecture.md
+.cursorrules
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+db.sqlite3
+db.sqlite3-journal
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
