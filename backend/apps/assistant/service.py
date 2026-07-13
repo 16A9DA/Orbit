@@ -1,9 +1,5 @@
-"""AI assistant. Local-only via Ollama. Falls back to rule-based if Ollama down.
-
-Analyzes services, alerts, tasks, activity. Model picked from installed Ollama
-models (default llama3.2:3b, override with OLLAMA_MODEL).
-"""
 import logging
+import re
 
 import requests
 from django.conf import settings
@@ -24,23 +20,50 @@ def snapshot():
 
 def ask(question):
     services, alerts, tasks, activity = snapshot()
-    answer = _ask_ollama(question, services, alerts, tasks, activity)
+    repo_url = _extract_repo_url(question)
+    answer = _ask_ollama(question, services, alerts, tasks, activity, repo_url)
     if answer:
         return answer
     return _rule_based(question, services, alerts, tasks)
 
 
-def _ask_ollama(question, services, alerts, tasks, activity):
+def _extract_repo_url(question):
+    match = re.search(r"https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+", question)
+    return match.group(0).rstrip("/.") if match else None
+
+
+def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
     context = {
         "services": [f"{s.name} ({s.type}): {s.status}" for s in services],
         "alerts": [f"[{a.severity}] {a.title}" for a in alerts],
         "tasks": [f"[{t.priority}] {t.title}" for t in tasks],
-        "activity": [f"{a.service}: {a.event}" for a in activity],
+        "activity": [
+            {
+                "service": a.service,
+                "event": a.event,
+                "metadata": getattr(a, "metadata", {}),
+                "created": str(a.created_at) if hasattr(a, "created_at") else None,
+            }
+            for a in activity
+        ],
+        "repository_url": repo_url,
+        "capabilities": [
+            "service monitoring",
+            "GitHub activity analysis",
+            "repository summaries",
+            "infrastructure questions",
+            "external service information",
+            "notifications and integrations when configured",
+        ],
     }
     system = (
         "You are the assistant inside a local infrastructure dashboard. "
-        "Answer briefly and concretely using only the given system state. "
-        "No preamble."
+        "Answer questions about the application, connected services, integrations, and monitored infrastructure. "
+        "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, and service activity. "
+        "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
+        "You can help explain external services such as hosting providers, billing plans, APIs, and configuration options when the information is available in the system state. "
+        "For requests that require an action (such as sending a message to Discord, creating a task, or triggering a service), explain what action is needed and use an available integration if one exists. "
+        "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."
     )
     prompt = f"System state:\n{context}\n\nUser: {question}"
     try:
