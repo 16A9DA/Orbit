@@ -6,6 +6,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.monitoring.models import Activity, Alert, Service, Task
+from apps.notifications.service import send_discord_message
 
 log = logging.getLogger(__name__)
 
@@ -20,11 +21,43 @@ def snapshot():
 
 def ask(question):
     services, alerts, tasks, activity = snapshot()
+
+    action_result = _handle_actions(question)
+    if action_result:
+        return action_result
+
     repo_url = _extract_repo_url(question)
     answer = _ask_ollama(question, services, alerts, tasks, activity, repo_url)
     if answer:
         return answer
     return _rule_based(question, services, alerts, tasks)
+
+
+# Handle special actions like sending Discord messages
+def _handle_actions(question):
+    q = question.lower()
+
+    discord_keywords = (
+        "send to discord",
+        "send on discord",
+        "post to discord",
+        "message discord",
+    )
+
+    if any(keyword in q for keyword in discord_keywords):
+        message = question
+
+        success = send_discord_message(
+            message,
+            channel="general",
+        )
+
+        if success:
+            return "Message sent to Discord general channel."
+
+        return "I could not send the Discord message. Check the Discord webhook configuration."
+
+    return None
 
 
 def _extract_repo_url(question):

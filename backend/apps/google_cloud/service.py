@@ -1,32 +1,95 @@
-"""Google Cloud monitor: billing, API usage, key activity, security events.
-
-ponytail: full GCP billing/monitoring needs a service account + client libs.
-Kept as mock telemetry plus an API-key-leak heuristic until real creds are wired.
-"""
+import logging
+import requests
 from django.conf import settings
 
 from apps.monitoring.collector import log_activity, upsert_service
 from apps.notifications.service import notify
 
+log = logging.getLogger(__name__)
+
+GCP_API = "https://monitoring.googleapis.com/v3"
+SERVICE_USAGE_API = "https://serviceusage.googleapis.com/v1"
+
+
+def _headers():
+    return {
+        "Authorization": f"Bearer {settings.GCP_API_KEY}",
+        "Accept": "application/json",
+    }
+
 
 def collect():
-    mock = not settings.GCP_API_KEY
-    metadata = {
-        "billing_month_usd": 4.12,
-        "api_requests_24h": 18432,
-        "active_keys": 3,
-        "mock": mock,
-    }
-    upsert_service("Google Cloud", "gcp", "operational", metadata)
-    log_activity("gcp", f"API requests (24h): {metadata['api_requests_24h']}", {"mock": mock})
+    if not settings.GCP_API_KEY:
+        return _mock()
 
-    # Security heuristic: unexpected key usage spike from a new region.
-    for event in _security_events():
-        notify("critical", event, "Investigate immediately. Possible credential exposure.",
-               source="gcp", make_alert=True)
-    return metadata
+    try:
+        metadata = {
+            "billing_month_usd": _get_billing(),
+            "api_requests_24h": _get_api_usage(),
+            "security_events": _security_events(),
+            "mock": False,
+        }
+
+        status = "operational"
+
+        if metadata["security_events"]:
+            status = "warning"
+            for event in metadata["security_events"]:
+                notify(
+                    "critical",
+                    event,
+                    "Investigate immediately. Possible credential exposure.",
+                    source="gcp",
+                    make_alert=True,
+                )
+
+        upsert_service("Google Cloud", "gcp", status, metadata)
+        log_activity(
+            "gcp",
+            f"API requests (24h): {metadata['api_requests_24h']}",
+            metadata,
+        )
+
+        return metadata
+
+    except requests.RequestException as e:
+        log.warning("Google Cloud collect failed: %s", e)
+        upsert_service("Google Cloud", "gcp", "unknown", {"error": str(e)})
+        return {"error": str(e)}
+
+
+def _get_billing():
+    # Replace with Cloud Billing API call once billing account endpoint is configured.
+    return 0
+
+
+def _get_api_usage():
+    response = requests.get(
+        f"{GCP_API}/projects/{settings.GCP_PROJECT_ID}/timeSeries",
+        headers=_headers(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return len(response.json().get("timeSeries", []))
 
 
 def _security_events():
-    # ponytail: real detection reads Cloud Audit Logs; stubbed to none by default.
-    return []
+    events = []
+
+    # Basic API key exposure heuristic.
+    if hasattr(settings, "GCP_API_KEY") and settings.GCP_API_KEY:
+        if len(settings.GCP_API_KEY) < 20:
+            events.append("Google Cloud API key looks invalid or exposed")
+
+    return events
+
+
+def _mock():
+    metadata = {
+        "billing_month_usd": 4.12,
+        "api_requests_24h": 18432,
+        "security_events": [],
+        "mock": True,
+    }
+    upsert_service("Google Cloud", "gcp", "operational", metadata)
+    return metadata

@@ -21,6 +21,7 @@ SOURCE_CHANNEL = {
     "render_billing": "billing",
     "gcp": "security",
     "sendgrid": "security",
+    "assistant": "general",
 }
 
 
@@ -58,6 +59,7 @@ def notify(severity, title, body="", source="", make_alert=True, discord=None, c
     return note
 
 
+
 def _push_discord(url, severity, title, body):
     content = f"{EMOJI.get(severity, '')} **{title}**"
     if body:
@@ -67,4 +69,25 @@ def _push_discord(url, severity, title, body):
         return r.ok
     except requests.RequestException as e:  # network failure must not break monitoring
         log.warning("Discord webhook failed: %s", e)
+        return False
+
+
+# Direct assistant-generated message to a Discord channel
+def send_discord_message(message, channel="general"):
+    """Send a direct assistant-generated message to a Discord channel."""
+    url = _resolve_url(channel)
+
+    if not url:
+        log.info("No valid Discord webhook for channel %r", channel)
+        return False
+
+    try:
+        r = requests.post(
+            url,
+            json={"content": message},
+            timeout=10,
+        )
+        return r.ok
+    except requests.RequestException as e:
+        log.warning("Discord direct message failed: %s", e)
         return False
