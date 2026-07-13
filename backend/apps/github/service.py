@@ -134,3 +134,51 @@ def get_latest_commit(repo=None):
         log.warning("Latest commit lookup failed: %s", e)
 
     return None
+
+
+def get_commit_history(repo=None, limit=10):
+    if not settings.GITHUB_TOKEN:
+        return []
+
+    try:
+        if not repo:
+            latest = get_latest_commit()
+            if not latest:
+                return []
+            repo = latest.get("repo")
+
+        r = requests.get(
+            f"{API}/repos/{repo}/commits",
+            headers=_headers(),
+            params={"per_page": limit},
+            timeout=15,
+        )
+        r.raise_for_status()
+
+        commits = []
+        for commit in r.json():
+            commits.append({
+                "repo": repo,
+                "sha": commit.get("sha"),
+                "message": commit.get("commit", {}).get("message", "").split("\n")[0],
+                "author": commit.get("commit", {}).get("author", {}).get("name"),
+                "date": commit.get("commit", {}).get("author", {}).get("date"),
+                "url": commit.get("html_url"),
+            })
+
+        return commits
+
+    except requests.RequestException as e:
+        log.warning("Commit history lookup failed: %s", e)
+        return []
+
+
+def get_github_context(repo=None):
+    """Provide structured GitHub context for the local AI model."""
+    latest = get_latest_commit(repo)
+    history = get_commit_history(repo)
+
+    return {
+        "latest_commit": latest,
+        "recent_commits": history,
+    }
