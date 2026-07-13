@@ -6,6 +6,9 @@ from apps.github.service import (
     comment_issue,
     get_latest_commit,
     get_repository_context,
+    get_github_ai_context,
+    search_repository_code,
+    get_repository_tree,
 )
 
 
@@ -15,44 +18,80 @@ GITHUB_TOOLS = {
     "comment_issue": comment_issue,
     "get_latest_commit": get_latest_commit,
     "get_repository_context": get_repository_context,
+    "get_github_ai_context": get_github_ai_context,
+    "search_repository_code": search_repository_code,
+    "get_repository_tree": get_repository_tree,
 }
 
 
 TOOL_DESCRIPTION = """
-Available GitHub actions:
+Available GitHub tools:
+
+get_repository_context:
+Analyze a GitHub repository.
+Required arguments:
+{
+    "repo": "owner/repository"
+}
+Returns repository metadata, README, languages, and commits.
+
+get_github_ai_context:
+Get complete AI context for a repository.
+Required arguments:
+{
+    "repo": "owner/repository"
+}
+Returns repository details, README, tree structure, and commits.
+
+get_latest_commit:
+Get latest commit.
+Arguments:
+{
+    "repo": "owner/repository"
+}
+
+search_repository_code:
+Search files inside a repository.
+Arguments:
+{
+    "repo": "owner/repository",
+    "query": "search term"
+}
+
+get_repository_tree:
+Get repository file structure.
+Arguments:
+{
+    "repo": "owner/repository",
+    "branch": "main"
+}
 
 create_issue:
 Create a GitHub issue.
 Arguments:
 {
-    repo: string,
-    title: string,
-    body: string
+    "repo": "owner/repository",
+    "title": "issue title",
+    "body": "issue description"
 }
 
 create_branch:
-Create a new branch.
+Create a branch.
 Arguments:
 {
-    repo: string,
-    branch: string,
-    from_branch: string
+    "repo": "owner/repository",
+    "branch": "new branch name",
+    "from_branch": "main"
 }
 
 comment_issue:
-Add a comment to a GitHub issue.
+Comment on an issue.
 Arguments:
 {
-    repo: string,
-    issue_number: integer,
-    comment: string
+    "repo": "owner/repository",
+    "issue_number": 1,
+    "comment": "message"
 }
-
-get_latest_commit:
-Return the latest commit information.
-
-get_repository_context:
-Return repository metadata, README, languages, and recent commits.
 """
 
 
@@ -64,4 +103,9 @@ def execute_tool(name, arguments):
             "error": f"Unknown tool: {name}"
         }
 
-    return tool(**arguments)
+    try:
+        return tool(**arguments)
+    except TypeError as e:
+        return {
+            "error": f"Invalid arguments for {name}: {str(e)}"
+        }

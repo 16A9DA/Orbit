@@ -1,6 +1,8 @@
 """GitHub monitor: commits, repo activity, PRs, failed Actions, security alerts."""
 import logging
 
+import base64
+
 import requests
 from django.conf import settings
 
@@ -12,10 +14,14 @@ API = "https://api.github.com"
 
 
 def _headers():
-    return {
-        "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+    headers = {
         "Accept": "application/vnd.github+json",
     }
+
+    if settings.GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.GITHUB_TOKEN}"
+
+    return headers
 
 
 def collect():
@@ -86,60 +92,52 @@ def _mock():
 
 
 def get_latest_commit(repo=None):
-
-    if not settings.GITHUB_TOKEN:
-        return None
-
+    """Return the latest commit from a repository or the authenticated user activity."""
     try:
         if repo:
-            url = f"{API}/repos/{repo}/commits"
             r = requests.get(
-                url,
+                f"{API}/repos/{repo}/commits",
                 headers=_headers(),
+                params={"per_page": 1},
                 timeout=15,
             )
             r.raise_for_status()
-
             commit = r.json()[0]
 
             return {
                 "repo": repo,
-                "message": commit["commit"]["message"],
-                "author": commit["commit"]["author"]["name"],
-                "date": commit["commit"]["author"]["date"],
-                "url": commit["html_url"],
+                "sha": commit.get("sha"),
+                "message": commit.get("commit", {}).get("message", "").split("\n")[0],
+                "author": commit.get("commit", {}).get("author", {}).get("name"),
+                "date": commit.get("commit", {}).get("author", {}).get("date"),
+                "url": commit.get("html_url"),
             }
 
-        # fallback: user's latest push
         r = requests.get(
             f"{API}/users/{settings.GITHUB_USER}/events/public",
             headers=_headers(),
             timeout=15,
         )
-
         r.raise_for_status()
 
         for event in r.json():
             if event.get("type") == "PushEvent":
-                commits = event["payload"].get("commits", [])
-
+                commits = event.get("payload", {}).get("commits", [])
                 if commits:
+                    commit = commits[-1]
                     return {
-                        "repo": event["repo"]["name"],
-                        "message": commits[-1]["message"],
-                        "sha": commits[-1]["sha"],
+                        "repo": event.get("repo", {}).get("name"),
+                        "sha": commit.get("sha"),
+                        "message": commit.get("message", "").split("\n")[0],
                     }
 
     except requests.RequestException as e:
-        log.warning("Latest commit lookup failed: %s", e)
+        log.warning("Latest commit lookup failed: %s", e, exc_info=True)
 
     return None
 
 
 def get_commit_history(repo=None, limit=10):
-    if not settings.GITHUB_TOKEN:
-        return []
-
     try:
         if not repo:
             latest = get_latest_commit()
@@ -169,7 +167,7 @@ def get_commit_history(repo=None, limit=10):
         return commits
 
     except requests.RequestException as e:
-        log.warning("Commit history lookup failed: %s", e)
+        log.warning("Commit history lookup failed: %s", e, exc_info=True)
         return []
 
 
@@ -185,9 +183,6 @@ def get_github_context(repo=None):
 
 
 def get_repository_info(repo):
-    if not settings.GITHUB_TOKEN:
-        return None
-
     try:
         r = requests.get(
             f"{API}/repos/{repo}",
@@ -210,14 +205,12 @@ def get_repository_info(repo):
         }
 
     except requests.RequestException as e:
-        log.warning("Repository info lookup failed: %s", e)
+        log.warning("Repository info lookup failed: %s", e, exc_info=True)
         return None
 
 
 def get_repository_readme(repo):
-    if not settings.GITHUB_TOKEN:
-        return None
-
+    """Return decoded README content for AI summarization."""
     try:
         r = requests.get(
             f"{API}/repos/{repo}/readme",
@@ -227,20 +220,18 @@ def get_repository_readme(repo):
         r.raise_for_status()
         data = r.json()
 
-        import base64
-        content = data.get("content", "")
+        content = data.get("content")
+        if not content:
+            return None
 
         return base64.b64decode(content).decode("utf-8", errors="ignore")
 
     except requests.RequestException as e:
-        log.warning("README lookup failed: %s", e)
+        log.warning("README lookup failed for %s: %s", repo, e, exc_info=True)
         return None
 
 
 def get_repository_languages(repo):
-    if not settings.GITHUB_TOKEN:
-        return {}
-
     try:
         r = requests.get(
             f"{API}/repos/{repo}/languages",
@@ -251,56 +242,52 @@ def get_repository_languages(repo):
         return r.json()
 
     except requests.RequestException as e:
-        log.warning("Language lookup failed: %s", e)
+        log.warning("Language lookup failed: %s", e, exc_info=True)
         return {}
 
 
 def get_repository_context(repo):
+    """Complete repository context for AI analysis."""
     return {
         "repository": get_repository_info(repo),
         "readme": get_repository_readme(repo),
         "languages": get_repository_languages(repo),
-        "commits": get_commit_history(repo, limit=5),
+        "commits": get_commit_history(repo, limit=10),
+        "latest_commit": get_latest_commit(repo),
     }
 
 
-def create_issue(repo, title, body):
-    """Create a GitHub issue from an AI action."""
+def create_issue(repo, title, body="Created by AI assistant"):
     if not settings.GITHUB_TOKEN:
-        return None
+        return {"error": "GitHub token missing"}
 
     try:
+        log.info("Creating GitHub issue repo=%s title=%s", repo, title)
         r = requests.post(
             f"{API}/repos/{repo}/issues",
             headers=_headers(),
-            json={
-                "title": title,
-                "body": body,
-            },
+            json={"title": title, "body": body},
             timeout=15,
         )
+        log.info("GitHub issue response status=%s body=%s", r.status_code, r.text)
         r.raise_for_status()
         issue = r.json()
 
         log_activity(
             "github",
             f"Created issue #{issue.get('number')} in {repo}",
-            {
-                "repo": repo,
-                "title": title,
-                "url": issue.get("html_url"),
-            },
+            {"repo": repo, "title": title, "url": issue.get("html_url")},
         )
 
         return {
             "number": issue.get("number"),
-            "url": issue.get("html_url"),
             "title": issue.get("title"),
+            "url": issue.get("html_url"),
         }
 
     except requests.RequestException as e:
         log.warning("Issue creation failed: %s", e)
-        return None
+        return {"error": str(e)}
 
 
 def create_branch(repo, branch, from_branch="main"):
@@ -359,3 +346,42 @@ def comment_issue(repo, issue_number, comment):
     except requests.RequestException as e:
         log.warning("Issue comment failed: %s", e)
         return None
+def get_repository_tree(repo, branch="main"):
+    try:
+        r = requests.get(
+            f"{API}/repos/{repo}/git/trees/{branch}",
+            headers=_headers(),
+            params={"recursive": 1},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return [item.get("path") for item in r.json().get("tree", [])]
+    except requests.RequestException as e:
+        log.warning("Repository tree lookup failed: %s", e)
+        return []
+
+
+def search_repository_code(repo, query):
+    try:
+        r = requests.get(
+            f"{API}/search/code",
+            headers=_headers(),
+            params={"q": f"{query} repo:{repo}"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json().get("items", [])
+    except requests.RequestException as e:
+        log.warning("Repository search failed: %s", e)
+        return []
+
+
+def get_github_ai_context(repo=None):
+    context = get_github_context(repo)
+
+    if repo:
+        context["repository"] = get_repository_context(repo)
+        context["readme_available"] = bool(context["repository"].get("readme"))
+        context["tree"] = get_repository_tree(repo)
+
+    return context

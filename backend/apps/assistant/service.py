@@ -1,5 +1,6 @@
 import logging
 import re
+import json
 
 import requests
 from django.conf import settings
@@ -7,7 +8,8 @@ from django.utils import timezone
 
 from apps.monitoring.models import Activity, Alert, Service, Task
 from apps.notifications.service import send_discord_message
-from apps.github.service import get_github_context, get_repository_context
+from apps.github.service import get_github_ai_context
+from apps.assistant.tools import execute_tool, TOOL_DESCRIPTION
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +36,6 @@ def ask(question):
     return _rule_based(question, services, alerts, tasks)
 
 
-# Handle special actions like sending Discord messages
 def _handle_actions(question):
     q = question.lower()
 
@@ -67,13 +68,15 @@ def _extract_repo_url(question):
 
 
 def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
-    github_context = get_github_context()
-    repository_context = None
+    github_context = None
+    repo_name = None
 
     if repo_url:
         match = re.search(r"github\.com/([\w.-]+/[\w.-]+)", repo_url)
         if match:
-            repository_context = get_repository_context(match.group(1).rstrip("/"))
+            repo_name = match.group(1).rstrip("/")
+
+    github_context = get_github_ai_context(repo_name)
 
     context = {
         "services": [f"{s.name} ({s.type}): {s.status}" for s in services],
@@ -90,23 +93,29 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         ],
         "repository_url": repo_url,
         "github": github_context,
-        "repository": repository_context,
         "capabilities": [
             "service monitoring",
             "GitHub activity analysis",
+            "latest commit tracking",
+            "commit history analysis",
             "repository summaries",
+            "repository structure analysis",
+            "repository code search",
             "infrastructure questions",
             "external service information",
             "notifications and integrations when configured",
+            "GitHub actions through available tools",
         ],
     }
     system = (
         "You are the assistant inside a local infrastructure dashboard. "
         "Answer questions about the application, connected services, integrations, and monitored infrastructure. "
-        "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, and service activity. "
+        "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, repository structure, README content, languages, and code search results. "
         "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
         "You can help explain external services such as hosting providers, billing plans, APIs, and configuration options when the information is available in the system state. "
-        "For requests that require an action (such as sending a message to Discord, creating a task, or triggering a service), explain what action is needed and use an available integration if one exists. "
+        "For requests that require an action, use available tools when possible. "
+        "When calling a tool, return only JSON in this format: {\"tool\": \"tool_name\", \"arguments\": {}}. Use GitHub tools for GitHub actions instead of explaining that you cannot access GitHub. "
+        "Available tools:\n" + TOOL_DESCRIPTION + "\n"
         "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."
     )
     prompt = f"System state:\n{context}\n\nUser: {question}"
@@ -124,7 +133,20 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
             timeout=60,
         )
         r.raise_for_status()
-        return r.json().get("message", {}).get("content", "").strip()
+        response = r.json().get("message", {}).get("content", "").strip()
+
+        try:
+            tool_request = json.loads(response)
+            if tool_request.get("tool"):
+                result = execute_tool(
+                    tool_request["tool"],
+                    tool_request.get("arguments", {}),
+                )
+                return f"Tool execution result:\n{result}"
+        except (ValueError, TypeError):
+            pass
+
+        return response
     except requests.RequestException as e:
         log.warning("Ollama assistant unavailable, using rule-based: %s", e)
         return None
