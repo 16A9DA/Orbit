@@ -1,4 +1,3 @@
-"""Render monitor: service status, deploys, monthly usage. Alert if cost > threshold."""
 import logging
 
 import requests

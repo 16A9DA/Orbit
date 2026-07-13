@@ -1,4 +1,3 @@
-"""`python manage.py runmonitor` — run every collector once (seed/refresh)."""
 from django.core.management.base import BaseCommand
 
 from apps.monitoring.runner import run_all

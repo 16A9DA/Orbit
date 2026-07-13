@@ -1,4 +1,3 @@
-"""Helpers integrations use to persist their findings."""
 from django.utils import timezone
 
 from apps.monitoring.models import Activity, Service

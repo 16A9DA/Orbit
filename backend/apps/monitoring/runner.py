@@ -1,4 +1,3 @@
-"""Run every integration collector once, or on a loop in a background thread."""
 import logging
 import threading
 import time

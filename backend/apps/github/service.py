@@ -34,12 +34,35 @@ def collect():
             repo = ev.get("repo", {}).get("name", "?")
             t = ev.get("type", "")
             if t == "PushEvent":
-                n = len(ev.get("payload", {}).get("commits", []))
+                commit_list = ev.get("payload", {}).get("commits", [])
+                n = len(commit_list)
                 commits += n
-                log_activity("github", f"Pushed {n} commit(s) to {repo}")
+
+                messages = [
+                    c.get("message", "").split("\n")[0]
+                    for c in commit_list
+                ]
+
+                log_activity(
+                    "github",
+                    f"Pushed {n} commit(s) to {repo}",
+                    {
+                        "repo": repo,
+                        "commits": messages,
+                    },
+                )
             elif t == "PullRequestEvent":
                 prs += 1
-                log_activity("github", f"PR {ev['payload'].get('action')} on {repo}")
+                pr = ev.get("payload", {}).get("pull_request", {})
+                log_activity(
+                    "github",
+                    f"PR {ev['payload'].get('action')} on {repo}",
+                    {
+                        "repo": repo,
+                        "title": pr.get("title"),
+                        "url": pr.get("html_url"),
+                    },
+                )
             elif t == "WorkflowRunEvent":
                 if ev.get("payload", {}).get("workflow_run", {}).get("conclusion") == "failure":
                     failed += 1

@@ -1,4 +1,3 @@
-"""`python manage.py dashboard` — runserver + auto-open browser + scheduler."""
 import os
 import threading
 import webbrowser

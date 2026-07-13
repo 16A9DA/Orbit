@@ -1,4 +1,3 @@
-"""SendGrid monitor: email usage, API usage, billing, suspicious activity."""
 import logging
 
 import requests
@@ -10,7 +9,6 @@ from apps.notifications.service import notify
 log = logging.getLogger(__name__)
 API = "https://api.sendgrid.com/v3"
 
-# Bounce rate above this fraction is treated as suspicious.
 BOUNCE_ALERT = 0.15
 
 

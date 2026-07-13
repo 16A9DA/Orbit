@@ -1,4 +1,3 @@
-"""Notification dispatch: in-app record plus Discord push routed per channel."""
 import logging
 from urllib.parse import urlparse
 
