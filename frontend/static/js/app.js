@@ -16,6 +16,7 @@ const TITLES = {
   alerts: ['Alerts', 'Active issues'],
   tasks: ['Tasks', 'What needs doing'],
   activity: ['Activity', 'Recent events'],
+  github: ['GitHub', 'Latest repository activity'],
   assistant: ['Assistant', 'Local AI over your data'],
   task: ['Task', 'Open task'],
 };
@@ -40,7 +41,24 @@ function renderWidgets(c) {
   $('[data-w="services"]').textContent = c.services;
   $('[data-w="alerts"]').textContent = c.alerts_critical + c.alerts_warning;
   $('[data-w="tasks_open"]').textContent = c.tasks_open;
+  $('[data-w="github"]').textContent = c.github_latest ? c.github_latest.repo : '–';
   $('#w-services-foot').textContent = c.degraded ? `${c.degraded} degraded` : 'all operational';
+}
+function renderGithub(latest) {
+  const el = $('#github-latest');
+  if (!el) return;
+
+  if (!latest) {
+    el.innerHTML = '<div class="svc-meta">No GitHub activity.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="row">
+      <span class="row-tag">${latest.repo}</span>
+      <span>${latest.message}</span>
+      <span class="row-time">${fmtTime(latest.timestamp)}</span>
+    </div>`;
 }
 
 function renderServices(services) {
@@ -62,6 +80,7 @@ function renderRows(el, rows, mapper) {
 function renderAll(data) {
   renderWidgets(data.counts);
   renderServices(data.services);
+  renderGithub(data.github_latest);
   renderRows($('#alerts-list'), data.alerts, (a) => `
     <div class="row sev-${a.severity}"><span class="row-time">${fmtTime(a.created_at)}</span>
     <span class="row-tag">${a.severity}</span><span>${a.title}</span></div>`);
@@ -186,4 +205,4 @@ $('#assistant-form').addEventListener('submit', async (e) => {
 });
 
 Promise.all([load(), loadTasks()]).catch((e) => console.error(e));
-setInterval(() => load().catch(() => {}), 30000);
+setInterval(() => load().catch(() => { }), 30000);

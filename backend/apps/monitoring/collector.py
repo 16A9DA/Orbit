@@ -17,3 +17,16 @@ def upsert_service(name, type, status, metadata=None):
 
 def log_activity(service, event, metadata=None):
     Activity.objects.create(service=service, event=event, metadata=metadata or {})
+
+
+def get_recent_activity(service=None, limit=10):
+    qs = Activity.objects.all().order_by("-created_at")
+
+    if service:
+        qs = qs.filter(service=service)
+
+    return qs[:limit]
+
+
+def get_service(name):
+    return Service.objects.filter(name=name).first()

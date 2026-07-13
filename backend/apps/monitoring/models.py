@@ -17,6 +17,9 @@ class Service(models.Model):
     class Meta:
         unique_together = ("name", "type")
         ordering = ["type", "name"]
+        indexes = [
+            models.Index(fields=["type", "status"]),
+        ]
 
     def __str__(self):
         return f"{self.type}:{self.name}"
@@ -65,11 +68,14 @@ class Activity(models.Model):
     service = models.CharField(max_length=60)
     event = models.CharField(max_length=300)
     metadata = models.JSONField(default=dict, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-timestamp"]
         verbose_name_plural = "activities"
+        indexes = [
+            models.Index(fields=["service", "-timestamp"]),
+        ]
 
     def __str__(self):
         return f"{self.service}: {self.event}"

@@ -83,3 +83,54 @@ def _mock():
     log_activity("github", "Pushed 3 commit(s) to ryn/dashboard", {"mock": True})
     log_activity("github", "PR opened on ryn/dashboard", {"mock": True})
     return {"commits": 12, "prs": 2, "failed_actions": 0, "mock": True}
+
+
+def get_latest_commit(repo=None):
+
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        if repo:
+            url = f"{API}/repos/{repo}/commits"
+            r = requests.get(
+                url,
+                headers=_headers(),
+                timeout=15,
+            )
+            r.raise_for_status()
+
+            commit = r.json()[0]
+
+            return {
+                "repo": repo,
+                "message": commit["commit"]["message"],
+                "author": commit["commit"]["author"]["name"],
+                "date": commit["commit"]["author"]["date"],
+                "url": commit["html_url"],
+            }
+
+        # fallback: user's latest push
+        r = requests.get(
+            f"{API}/users/{settings.GITHUB_USER}/events/public",
+            headers=_headers(),
+            timeout=15,
+        )
+
+        r.raise_for_status()
+
+        for event in r.json():
+            if event.get("type") == "PushEvent":
+                commits = event["payload"].get("commits", [])
+
+                if commits:
+                    return {
+                        "repo": event["repo"]["name"],
+                        "message": commits[-1]["message"],
+                        "sha": commits[-1]["sha"],
+                    }
+
+    except requests.RequestException as e:
+        log.warning("Latest commit lookup failed: %s", e)
+
+    return None

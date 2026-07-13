@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
 </head>
+
 <body>
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark"></span> Dashboard</div>
@@ -56,6 +58,11 @@
           <div class="widget-value" data-w="activity">–</div>
           <div class="widget-foot">recent events</div>
         </button>
+        <button class="widget" data-view="github">
+          <div class="widget-label">GitHub</div>
+          <div class="widget-value" data-w="github">–</div>
+          <div class="widget-foot">latest commit</div>
+        </button>
         <button class="widget accent" data-view="assistant">
           <div class="widget-label">Assistant</div>
           <div class="widget-value">Ask</div>
@@ -67,12 +74,16 @@
     <!-- Detail views -->
     <section class="view hidden" id="view-services">
       <button class="back" data-view="home">&larr; Back</button>
-      <div class="card"><div class="svc-grid" id="service-grid"></div></div>
+      <div class="card">
+        <div class="svc-grid" id="service-grid"></div>
+      </div>
     </section>
 
     <section class="view hidden" id="view-alerts">
       <button class="back" data-view="home">&larr; Back</button>
-      <div class="card"><div class="rows" id="alerts-list"></div></div>
+      <div class="card">
+        <div class="rows" id="alerts-list"></div>
+      </div>
     </section>
 
     <section class="view hidden" id="view-tasks">
@@ -119,7 +130,23 @@
 
     <section class="view hidden" id="view-activity">
       <button class="back" data-view="home">&larr; Back</button>
-      <div class="card"><div class="rows" id="activity-list"></div></div>
+      <div class="card">
+        <div class="rows" id="activity-list"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-github">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card">
+        <div class="rows" id="github-latest">
+          <div class="row">
+            <div>
+              <strong>Latest GitHub activity</strong>
+              <div class="muted">Waiting for data...</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="view hidden" id="view-assistant">
@@ -138,4 +165,5 @@
 
   <script src="{% static 'js/app.js' %}"></script>
 </body>
+
 </html>
