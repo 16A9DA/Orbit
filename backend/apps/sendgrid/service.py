@@ -1,4 +1,5 @@
 import logging
+import re
 
 import requests
 from django.conf import settings
@@ -13,10 +14,17 @@ API = "https://api.sendgrid.com/v3"
 BOUNCE_ALERT = 0.15
 SPAM_ALERT = 0.05
 
+# SendGrid keys look like "SG.<22 chars>.<43 chars>".
+SENDGRID_KEY_RE = re.compile(r"^SG\.[\w-]{16,32}\.[\w-]{30,50}$")
+
 
 def collect():
     if not settings.SENDGRID_API_KEY:
-        return _mock()
+        upsert_service("SendGrid", "sendgrid", "unknown", {"error": "SendGrid API key not configured"})
+        return {"error": "SendGrid API key not configured"}
+
+    leaks = _leak_events()
+
     try:
         h = {"Authorization": f"Bearer {settings.SENDGRID_API_KEY}"}
         r = requests.get(f"{API}/stats", headers=h,
@@ -25,8 +33,9 @@ def collect():
         stats = _flatten(r.json())
 
         stats.update(_get_reputation(h))
+        stats["security_events"] = leaks
 
-        status = _service_status(stats)
+        status = "warning" if leaks else _service_status(stats)
 
         upsert_service("SendGrid", "sendgrid", status, stats)
         log_activity(
@@ -36,11 +45,47 @@ def collect():
         )
 
         _check_suspicious(stats)
+        _check_overage(stats)
+        _notify_leaks(leaks)
         return stats
     except requests.RequestException as e:
         log.warning("SendGrid collect failed: %s", e)
         upsert_service("SendGrid", "sendgrid", "unknown", {"error": str(e)})
         return {"error": str(e)}
+
+
+def _leak_events():
+    """Detect an exposed or malformed SendGrid API key."""
+    events = []
+    key = settings.SENDGRID_API_KEY
+    if key and not SENDGRID_KEY_RE.match(key):
+        events.append("SendGrid API key is malformed or possibly exposed")
+    return events
+
+
+def _notify_leaks(leaks):
+    for event in leaks:
+        notify(
+            "critical",
+            event,
+            "Rotate the SendGrid API key immediately.",
+            source="sendgrid",
+            make_alert=True,
+        )
+
+
+def _check_overage(stats):
+    """Alert when remaining email credits run out (billing overage risk)."""
+    credits = stats.get("credits") or {}
+    remaining = credits.get("remain")
+    if remaining is not None and remaining <= 0:
+        notify(
+            "warning",
+            "SendGrid credits exhausted",
+            "Email credits are depleted. Further sends may incur overage charges.",
+            source="sendgrid",
+            make_alert=True,
+        )
 
 # --- reputation and status helpers ---
 
@@ -105,11 +150,3 @@ def _check_suspicious(stats):
             f"Spam rate {spam}/{requests_sent} exceeds {SPAM_ALERT:.0%}.",
             source="sendgrid",
         )
-
-
-def _mock():
-    stats = {"requests": 540, "delivered": 512, "bounces": 8, "blocks": 2,
-             "opens": 320, "mock": True}
-    upsert_service("SendGrid", "sendgrid", "operational", stats)
-    log_activity("sendgrid", "Delivered 512 emails", {"mock": True})
-    return stats

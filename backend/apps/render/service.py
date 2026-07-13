@@ -1,4 +1,5 @@
 import logging
+import re
 
 import requests
 from django.conf import settings
@@ -11,15 +12,32 @@ API = "https://api.render.com/v1"
 
 COST_THRESHOLD = 5.68
 
+# Render API keys look like "rnd_<alphanumerics>".
+RENDER_KEY_RE = re.compile(r"^rnd_[A-Za-z0-9]{16,}$")
+
 
 def _auth():
     return {"Authorization": f"Bearer {settings.RENDER_API_KEY}", "Accept": "application/json"}
+
+
+def _check_leak():
+    """Alert on a malformed or possibly exposed Render API key."""
+    key = settings.RENDER_API_KEY
+    if key and not RENDER_KEY_RE.match(key):
+        notify(
+            "critical",
+            "Render API key is malformed or possibly exposed",
+            "Rotate the Render API key immediately.",
+            source="render",
+            make_alert=True,
+        )
 
 
 def collect():
     if not settings.RENDER_API_KEY:
         upsert_service("Render", "render", "unknown", {"error": "Render API key not configured"})
         return {"error": "Render API key not configured"}
+    _check_leak()
     try:
         h = _auth()
         r = requests.get(f"{API}/services?limit=20", headers=h, timeout=15)

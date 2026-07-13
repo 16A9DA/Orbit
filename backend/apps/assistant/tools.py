@@ -1,7 +1,8 @@
 
 import re
+import subprocess
 
-
+from django.conf import settings
 
 from apps.github.service import (
     create_issue,
@@ -16,6 +17,28 @@ from apps.github.service import (
 from apps.google_cloud.service import collect as get_google_cloud_context
 
 
+def get_local_git_changes(limit=15):
+    """Local git state of this project: what the user has changed and recent commits."""
+    root = str(settings.PROJECT_ROOT)
+
+    def _git(*args):
+        try:
+            return subprocess.run(
+                ["git", "-C", root, *args],
+                capture_output=True, text=True, timeout=15,
+            ).stdout.strip()
+        except (subprocess.SubprocessError, OSError) as e:
+            return f"error: {e}"
+
+    return {
+        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "status": _git("status", "--short"),
+        "diff_stat": _git("diff", "--stat"),
+        "staged_diff_stat": _git("diff", "--cached", "--stat"),
+        "recent_commits": _git("log", f"-{int(limit)}", "--oneline"),
+    }
+
+
 GITHUB_TOOLS = {
     "create_issue": create_issue,
     "create_branch": create_branch,
@@ -26,6 +49,7 @@ GITHUB_TOOLS = {
     "search_repository_code": search_repository_code,
     "get_repository_tree": get_repository_tree,
     "get_google_cloud_context": get_google_cloud_context,
+    "get_local_git_changes": get_local_git_changes,
 }
 
 
@@ -35,6 +59,13 @@ Available GitHub tools:
 get_google_cloud_context:
 Check Google Cloud infrastructure health.
 Returns billing status, API usage, enabled APIs, cost anomalies, service health, quotas, and recent errors.
+Arguments:
+{}
+
+get_local_git_changes:
+Get the local git state of this dashboard project: the user's own uncommitted changes and recent commit history.
+Use for questions like "what changes have I done", "what did I edit locally", "recent commits".
+Returns current branch, working-tree status, diff stats, and recent commit log.
 Arguments:
 {}
 
