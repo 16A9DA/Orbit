@@ -91,6 +91,11 @@ body {
 .svc-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
 .svc-row.cost span { color: var(--muted); }
 .svc-row.leak { color: var(--warn, #b45309); display: block; }
+.svc.clickable { cursor: pointer; }
+.svc.clickable:hover { border-color: var(--muted); }
+.svc-logs { margin-top: 10px; max-height: 260px; overflow: auto; background: #0d1117; color: #d1d5db;
+  border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.5; }
+.log-line { white-space: pre-wrap; word-break: break-word; }
 .badge { font-size: 11px; font-weight: 600; text-transform: capitalize; padding: 3px 9px; border-radius: 999px; }
 .badge.operational { color: var(--ok); background: #e6f7ef; }
 .badge.degraded { color: var(--warn); background: #fdf6e3; }

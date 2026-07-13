@@ -14,5 +14,6 @@ urlpatterns = [
     path("summary/", views.summary),
     path("refresh/", views.refresh),
     path("assistant/", views.assistant),
+    path("render/<str:service_id>/logs/", views.render_logs),
     path("", include(router.urls)),
 ]

@@ -9,12 +9,18 @@ from apps.notifications.service import notify
 log = logging.getLogger(__name__)
 API = "https://api.render.com/v1"
 
+COST_THRESHOLD = 5.0
+
+
+def _auth():
+    return {"Authorization": f"Bearer {settings.RENDER_API_KEY}", "Accept": "application/json"}
+
 
 def collect():
     if not settings.RENDER_API_KEY:
         return _finish(_mock_cost(), mock=True)
     try:
-        h = {"Authorization": f"Bearer {settings.RENDER_API_KEY}", "Accept": "application/json"}
+        h = _auth()
         r = requests.get(f"{API}/services?limit=20", headers=h, timeout=15)
         r.raise_for_status()
         services = r.json()
@@ -23,7 +29,15 @@ def collect():
             name = s.get("name", "render-service")
             suspended = s.get("suspended", "not_suspended")
             status = "operational" if suspended == "not_suspended" else "down"
-            upsert_service(name, "render", status, {"id": s.get("id")})
+            deploy = _latest_deploy(h, s.get("id"))
+            upsert_service(name, "render", status, {
+                "id": s.get("id"),
+                "service_type": s.get("type"),
+                "url": s.get("serviceDetails", {}).get("url") or s.get("dashboardUrl"),
+                "branch": s.get("branch"),
+                "suspended": suspended,
+                "latest_deploy": deploy,
+            })
             log_activity("render", f"Service {name} status {status}")
         cost = _fetch_cost(h)
         return _finish(cost)
@@ -31,6 +45,33 @@ def collect():
         log.warning("Render collect failed: %s", e)
         upsert_service("Render", "render", "unknown", {"error": str(e)})
         return {"error": str(e)}
+
+
+def _latest_deploy(headers, service_id):
+    """Most recent deploy id/status/time for a service, for log lookups."""
+    if not service_id:
+        return None
+    try:
+        r = requests.get(f"{API}/services/{service_id}/deploys?limit=1", headers=headers, timeout=15)
+        r.raise_for_status()
+        items = r.json()
+        if not items:
+            return None
+        d = items[0].get("deploy", items[0])
+        return {"id": d.get("id"), "status": d.get("status"), "created_at": d.get("createdAt")}
+    except requests.RequestException as e:
+        log.warning("Render latest deploy lookup failed: %s", e)
+        return None
+
+
+def get_service_logs(service_id):
+    """Logs for a service's most recent deploy. Used by the dashboard on click."""
+    if not settings.RENDER_API_KEY:
+        return {"error": "Render API key not configured", "logs": []}
+    deploy = _latest_deploy(_auth(), service_id)
+    if not deploy or not deploy.get("id"):
+        return {"error": "No deploys found", "logs": []}
+    return {"deploy": deploy, "logs": get_deployment_logs(service_id, deploy["id"])}
 
 
 def get_deployment_logs(service_id, deploy_id):
@@ -93,24 +134,24 @@ def _mock_cost():
 
 
 def _finish(cost, mock=False):
-    expected_limit = 5.68
-    within_budget = cost <= expected_limit
+    within_budget = cost <= COST_THRESHOLD
     status = "operational" if within_budget else "warning"
 
     metadata = {
         "monthly_cost": cost,
-        "expected_monthly_cost": expected_limit,
+        "expected_monthly_cost": COST_THRESHOLD,
         "within_expected_cost": within_budget,
         "mock": mock,
     }
 
     if not within_budget:
-        metadata["issue"] = f"Render cost exceeded expected $5.00 limit. Current: ${cost:.2f}"
+        metadata["issue"] = f"Render cost exceeded ${COST_THRESHOLD:.2f} limit. Current: ${cost:.2f}"
         notify(
             "warning",
             "Render cost exceeded expected limit",
             metadata["issue"],
             source="render_billing",
+            make_alert=True,
         )
 
     upsert_service(

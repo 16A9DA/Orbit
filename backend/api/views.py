@@ -70,3 +70,9 @@ def assistant(request):
     if not question:
         return Response({"error": "question required"}, status=400)
     return Response({"answer": ask(question)})
+
+
+@api_view(["GET"])
+def render_logs(request, service_id):
+    from apps.render.service import get_service_logs
+    return Response(get_service_logs(service_id))

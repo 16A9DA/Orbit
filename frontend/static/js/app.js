@@ -74,19 +74,63 @@ function gcpDetail(m) {
   return rows.length ? `<div class="svc-detail">${rows.join('')}</div>` : '';
 }
 
+function renderDetail(m) {
+  const rows = [];
+  if (m.monthly_cost != null) {
+    rows.push(`<div class="svc-row"><span>Monthly cost</span><b>$${Number(m.monthly_cost).toFixed(2)}</b></div>`);
+    rows.push(`<div class="svc-row"><span>Expected</span><b>$${Number(m.expected_monthly_cost).toFixed(2)}</b></div>`);
+    if (m.within_expected_cost === false)
+      rows.push(`<div class="svc-row leak">⚠ ${m.issue || 'Over budget'}</div>`);
+    return `<div class="svc-detail">${rows.join('')}</div>`;
+  }
+  if (m.service_type) rows.push(`<div class="svc-row"><span>Type</span><b>${m.service_type}</b></div>`);
+  if (m.branch) rows.push(`<div class="svc-row"><span>Branch</span><b>${m.branch}</b></div>`);
+  if (m.latest_deploy) rows.push(`<div class="svc-row"><span>Last deploy</span><b>${m.latest_deploy.status || '–'}</b></div>`);
+  return rows.length ? `<div class="svc-detail">${rows.join('')}</div>` : '';
+}
+
 function renderServices(services) {
   $('#service-grid').innerHTML = services.map((s) => {
     const m = s.metadata || {};
     const meta = Object.entries(m)
       .filter(([k, v]) => !['mock', 'id', 'error'].includes(k) && typeof v !== 'object')
       .slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ');
-    const detail = s.type === 'gcp' ? gcpDetail(m) : '';
-    return `<div class="svc">
+    let detail = '';
+    let attrs = '';
+    if (s.type === 'gcp') detail = gcpDetail(m);
+    else if (s.type === 'render') {
+      detail = renderDetail(m);
+      if (m.id) attrs = ` class="svc clickable" data-render-id="${m.id}"`;
+    }
+    return `<div${attrs || ' class="svc"'}>
       <div class="svc-top"><span class="svc-name">${s.name}</span>
       <span class="badge ${s.status}">${s.status}</span></div>
-      <div class="svc-meta">${meta || s.type}</div>${detail}</div>`;
+      <div class="svc-meta">${meta || s.type}</div>${detail}
+      ${m.id ? '<div class="svc-logs hidden"></div>' : ''}</div>`;
   }).join('') || '<div class="svc-meta">No services. Hit Refresh.</div>';
 }
+
+// Click a Render app card to load and toggle its latest deploy logs.
+$('#service-grid').addEventListener('click', async (e) => {
+  const card = e.target.closest('[data-render-id]');
+  if (!card) return;
+  const box = card.querySelector('.svc-logs');
+  if (!box) return;
+  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.textContent = 'Loading logs…';
+  try {
+    const data = await api(`/render/${card.dataset.renderId}/logs/`);
+    const logs = data.logs || [];
+    box.textContent = '';
+    if (data.error) { box.textContent = data.error; return; }
+    if (!logs.length) { box.textContent = 'No logs.'; return; }
+    box.innerHTML = logs.map((l) =>
+      `<div class="log-line">${typeof l === 'string' ? l : (l.message || JSON.stringify(l))}</div>`).join('');
+  } catch (err) {
+    box.textContent = `Failed to load logs: ${err.message}`;
+  }
+});
 
 function renderRows(el, rows, mapper) {
   el.innerHTML = rows.map(mapper).join('') || '<div class="svc-meta">Nothing here.</div>';
