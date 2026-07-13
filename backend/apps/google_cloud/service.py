@@ -79,10 +79,14 @@ def collect():
         settings.GCP_PROJECT_ID = project_id
 
     try:
+        global _billing_off
+        _billing_off = False
+
         cost_by_service = _cost_by_service()
         instances = _compute_instances()
 
         metadata = {
+            "billing_enabled": None,  # set after monitoring calls below
             "billing_month_usd": _get_billing(),
             "cost_by_service": cost_by_service,
             "running_instances": instances["running"],
@@ -96,6 +100,8 @@ def collect():
             "recent_errors": _recent_errors(),
             "mock": False,
         }
+
+        metadata["billing_enabled"] = not _billing_off
 
         status = "operational"
 
@@ -290,6 +296,21 @@ def _service_health():
     }
 
 
+# Set by monitoring calls when the project has billing disabled (403).
+_billing_off = False
+
+
+def _note_billing(e):
+    """Return True and flag billing-off if the error is a billing-disabled 403."""
+    global _billing_off
+    resp = getattr(e, "response", None)
+    if resp is not None and resp.status_code == 403 and "billing" in resp.text.lower():
+        _billing_off = True
+        log.info("Google Cloud monitoring unavailable: project billing is disabled.")
+        return True
+    return False
+
+
 def _get_api_usage():
     try:
         project_id = getattr(settings, "GCP_PROJECT_ID", os.getenv("GCP_PROJECT"))
@@ -316,7 +337,8 @@ def _get_api_usage():
         return len(response.json().get("timeSeries", []))
 
     except requests.RequestException as e:
-        log.warning("Google API usage lookup failed: %s", e, exc_info=True)
+        if not _note_billing(e):
+            log.warning("Google API usage lookup failed: %s", e, exc_info=True)
         return 0
 
 def _quota_usage():
@@ -349,7 +371,8 @@ def _quota_usage():
         }
 
     except requests.RequestException as e:
-        log.warning("Quota lookup failed: %s", e, exc_info=True)
+        if not _note_billing(e):
+            log.warning("Quota lookup failed: %s", e, exc_info=True)
         return {
             "metrics_checked": 0
         }
@@ -402,6 +425,7 @@ def _security_events(instances=None):
 
 def _mock():
     metadata = {
+        "billing_enabled": True,
         "billing_month_usd": 4.12,
         "cost_by_service": [
             {"service": "Compute Engine", "cost_usd": 3.10},

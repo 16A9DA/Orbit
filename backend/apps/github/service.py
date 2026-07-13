@@ -1,4 +1,3 @@
-"""GitHub monitor: commits, repo activity, PRs, failed Actions, security alerts."""
 import logging
 
 import base64
@@ -77,6 +76,15 @@ def collect():
         upsert_service("GitHub", "github", "operational",
                        {"commits": commits, "prs": prs, "failed_actions": failed})
         return {"commits": commits, "prs": prs, "failed_actions": failed}
+    except requests.HTTPError as e:
+        if e.response is not None and e.response.status_code == 404:
+            msg = f"GitHub user '{settings.GITHUB_USER}' not found. Check GITHUB_USER."
+            log.warning(msg)
+            upsert_service("GitHub", "github", "unknown", {"error": msg})
+            return {"error": msg}
+        log.warning("GitHub collect failed: %s", e)
+        upsert_service("GitHub", "github", "unknown", {"error": str(e)})
+        return {"error": str(e)}
     except requests.RequestException as e:
         log.warning("GitHub collect failed: %s", e)
         upsert_service("GitHub", "github", "unknown", {"error": str(e)})

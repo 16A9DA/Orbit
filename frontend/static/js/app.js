@@ -1,4 +1,3 @@
-// Orbit dashboard — live data over /api, layout from Dashboard.dc.html design.
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -162,15 +161,17 @@ function renderGithubCard(services) {
 function renderBilling(services) {
   const rBill = byType(services, 'render').find((s) => meta(s).monthly_cost != null);
   const gcp = byType(services, 'gcp')[0];
+  const gcpOff = gcp && meta(gcp).billing_enabled === false;
   const rows = [];
   if (rBill) rows.push({ name: 'Render', amount: Number(meta(rBill).monthly_cost || 0), color: 'oklch(0.62 0.16 200)' });
-  if (gcp && meta(gcp).billing_month_usd != null) rows.push({ name: 'Google Cloud', amount: Number(meta(gcp).billing_month_usd || 0), color: 'oklch(0.68 0.17 280)' });
-  const total = rows.reduce((a, r) => a + r.amount, 0);
+  if (gcpOff) rows.push({ name: 'Google Cloud', off: true, color: 'oklch(0.5 0.02 260)' });
+  else if (gcp && meta(gcp).billing_month_usd != null) rows.push({ name: 'Google Cloud', amount: Number(meta(gcp).billing_month_usd || 0), color: 'oklch(0.68 0.17 280)' });
+  const total = rows.reduce((a, r) => a + (r.amount || 0), 0);
   $('#billing-total').textContent = money(total);
   $('#billing-stack').innerHTML = rows.map((r) =>
     `<i style="width:${total ? (r.amount / total) * 100 : 0}%;background:${r.color}"></i>`).join('');
   $('#billing-rows').innerHTML = rows.map((r) =>
-    `<div class="bill-row"><span class="sw" style="background:${r.color}"></span><span>${r.name}</span><span class="amt">${money(r.amount)}</span></div>`).join('')
+    `<div class="bill-row"><span class="sw" style="background:${r.color}"></span><span>${r.name}</span><span class="amt">${r.off ? 'Billing off' : money(r.amount)}</span></div>`).join('')
     || '<div class="row"><span class="sub">No billing data.</span></div>';
 }
 
