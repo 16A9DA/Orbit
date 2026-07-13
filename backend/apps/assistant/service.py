@@ -138,11 +138,47 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         try:
             tool_request = json.loads(response)
             if tool_request.get("tool"):
+                arguments = tool_request.get("arguments") or {}
+
+                # Recover repository argument if the model omitted it.
+                if "repo" not in arguments:
+                    if repo_name:
+                        arguments["repo"] = repo_name
+                    elif repo_url:
+                        match = re.search(r"github\.com/([\w.-]+/[\w.-]+)", repo_url)
+                        if match:
+                            arguments["repo"] = match.group(1).rstrip("/")
+
                 result = execute_tool(
                     tool_request["tool"],
-                    tool_request.get("arguments", {}),
+                    arguments,
                 )
-                return f"Tool execution result:\n{result}"
+
+                summary_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an AI assistant. A tool has already been executed successfully. "
+                            "Use ONLY the tool result to answer the user's original request. "
+                            "Do not mention tool execution, JSON, or internal implementation. "
+                            "If the tool result contains repository information, provide a concise summary with sections where appropriate."
+                        ),
+                    },
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": f"Tool result:\n{json.dumps(result, indent=2, default=str)}"},
+                ]
+
+                summary_response = requests.post(
+                    f"{settings.OLLAMA_HOST}/api/chat",
+                    json={
+                        "model": settings.OLLAMA_MODEL,
+                        "stream": False,
+                        "messages": summary_messages,
+                    },
+                    timeout=60,
+                )
+                summary_response.raise_for_status()
+                return summary_response.json().get("message", {}).get("content", "").strip()
         except (ValueError, TypeError):
             pass
 

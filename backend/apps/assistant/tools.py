@@ -1,4 +1,6 @@
 
+import re
+
 
 from apps.github.service import (
     create_issue,
@@ -95,6 +97,37 @@ Arguments:
 """
 
 
+
+def normalize_tool_arguments(name, arguments):
+    """Normalize and validate arguments before executing tools."""
+    arguments = arguments or {}
+
+    if "repo" in arguments and isinstance(arguments["repo"], str):
+        arguments["repo"] = re.sub(
+            r"^https?://github\\.com/",
+            "",
+            arguments["repo"],
+        ).rstrip("/")
+
+    required_repo_tools = {
+        "get_repository_context",
+        "get_github_ai_context",
+        "get_latest_commit",
+        "search_repository_code",
+        "get_repository_tree",
+        "create_issue",
+        "create_branch",
+        "comment_issue",
+    }
+
+    if name in required_repo_tools and not arguments.get("repo"):
+        return {
+            "error": "Missing required repo argument. Expected owner/repository format."
+        }
+
+    return arguments
+
+
 def execute_tool(name, arguments):
     tool = GITHUB_TOOLS.get(name)
 
@@ -102,6 +135,11 @@ def execute_tool(name, arguments):
         return {
             "error": f"Unknown tool: {name}"
         }
+
+    arguments = normalize_tool_arguments(name, arguments)
+
+    if "error" in arguments:
+        return arguments
 
     try:
         return tool(**arguments)
