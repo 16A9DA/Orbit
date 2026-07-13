@@ -105,8 +105,23 @@ body {
 .sev-info .row-tag { color: var(--accent); }
 
 /* Tasks */
+.task-form { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.task-form input, .task-form select {
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  font-size: 14px; font-family: inherit; color: var(--ink);
+}
+.task-form #t-title { flex: 1; min-width: 160px; }
+.task-form input:focus, .task-form select:focus { outline: none; border-color: var(--accent); }
 .task-list { display: flex; flex-direction: column; gap: 10px; }
 .task { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+.task .t-check { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.task .t-title { flex: 1; }
+.task.done .t-title { text-decoration: line-through; color: var(--muted); }
+.task .t-del {
+  border: none; background: none; color: var(--muted); font-size: 20px; line-height: 1;
+  cursor: pointer; padding: 0 4px;
+}
+.task .t-del:hover { color: var(--err); }
 .prio { width: 8px; height: 8px; border-radius: 50%; }
 .prio.high { background: var(--err); }
 .prio.medium { background: var(--warn); }

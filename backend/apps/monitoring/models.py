@@ -46,7 +46,7 @@ class Alert(models.Model):
 class Task(models.Model):
     PRIORITY = [("high", "High"), ("medium", "Medium"), ("low", "Low")]
     STATUS = [("todo", "Todo"), ("in_progress", "In Progress"), ("done", "Done")]
-    source = models.CharField(max_length=60, default="notion")
+    source = models.CharField(max_length=60, default="manual")
     external_id = models.CharField(max_length=200, blank=True)
     title = models.CharField(max_length=300)
     priority = models.CharField(max_length=20, choices=PRIORITY, default="medium")

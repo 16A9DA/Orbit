@@ -26,7 +26,6 @@ INSTALLED_APPS = [
     "apps.render",
     "apps.google_cloud",
     "apps.sendgrid",
-    "apps.notion",
     "apps.notifications",
     "apps.assistant",
 ]
@@ -94,8 +93,6 @@ RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 GCP_API_KEY = os.getenv("GCP_API_KEY", "")
 GCP_PROJECT = os.getenv("GCP_PROJECT", "")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-NOTION_TOKEN = os.getenv("NOTION_TOKEN", "")
-NOTION_TASKS_DB = os.getenv("NOTION_TASKS_DB", "")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")

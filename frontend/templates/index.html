@@ -77,7 +77,19 @@
 
     <section class="view hidden" id="view-tasks">
       <button class="back" data-view="home">&larr; Back</button>
-      <div class="card"><div class="task-list" id="task-list"></div></div>
+      <div class="card">
+        <form class="task-form" id="task-form">
+          <input id="t-title" placeholder="New task…" autocomplete="off" required />
+          <select id="t-priority">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <input id="t-due" type="date" />
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <div class="task-list" id="task-list"></div>
+      </div>
     </section>
 
     <section class="view hidden" id="view-activity">

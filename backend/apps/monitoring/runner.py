@@ -7,7 +7,6 @@ from django.conf import settings
 
 from apps.github import service as github
 from apps.google_cloud import service as gcp
-from apps.notion import service as notion
 from apps.render import service as render
 from apps.sendgrid import service as sendgrid
 
@@ -18,7 +17,6 @@ COLLECTORS = {
     "render": render.collect,
     "gcp": gcp.collect,
     "sendgrid": sendgrid.collect,
-    "notion": notion.collect,
 }
 
 

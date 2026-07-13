@@ -67,12 +67,57 @@ function renderAll(data) {
   renderRows($('#activity-list'), data.activity, (a) => `
     <div class="row"><span class="row-time">${fmtTime(a.timestamp)}</span>
     <span class="row-tag">${a.service}</span><span>${a.event}</span></div>`);
-  $('#task-list').innerHTML = data.tasks.map((t) => {
-    const due = t.deadline ? new Date(t.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-    return `<div class="task"><span class="prio ${t.priority}"></span><span>${t.title}</span>
-      <span class="task-due">${due}</span></div>`;
-  }).join('') || '<div class="svc-meta">No open tasks.</div>';
 }
+
+async function loadTasks() {
+  const tasks = await api('/tasks/');
+  $('#task-list').innerHTML = tasks.map((t) => {
+    const due = t.deadline ? new Date(t.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+    const done = t.status === 'done';
+    return `<div class="task ${done ? 'done' : ''}" data-id="${t.id}">
+      <input type="checkbox" class="t-check" ${done ? 'checked' : ''} />
+      <span class="prio ${t.priority}"></span>
+      <span class="t-title">${t.title}</span>
+      <span class="task-due">${due}</span>
+      <button class="t-del" title="Delete">&times;</button>
+    </div>`;
+  }).join('') || '<div class="svc-meta">No tasks yet. Add one above.</div>';
+}
+
+$('#task-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await api('/tasks/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: $('#t-title').value.trim(),
+      priority: $('#t-priority').value,
+      deadline: $('#t-due').value || null,
+      source: 'manual',
+    }),
+  });
+  e.target.reset();
+  await Promise.all([loadTasks(), load()]);
+});
+
+$('#task-list').addEventListener('click', async (e) => {
+  const row = e.target.closest('.task');
+  if (!row) return;
+  const id = row.dataset.id;
+  if (e.target.classList.contains('t-del')) {
+    await api(`/tasks/${id}/`, { method: 'DELETE' });
+  } else if (e.target.classList.contains('t-check')) {
+    const status = e.target.checked ? 'done' : 'todo';
+    await api(`/tasks/${id}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+  } else {
+    return;
+  }
+  await Promise.all([loadTasks(), load()]);
+});
 
 async function load() {
   renderAll(await api('/summary/'));
@@ -108,5 +153,5 @@ $('#assistant-form').addEventListener('submit', async (e) => {
   log.scrollTop = log.scrollHeight;
 });
 
-load().catch((e) => console.error(e));
+Promise.all([load(), loadTasks()]).catch((e) => console.error(e));
 setInterval(() => load().catch(() => {}), 30000);
