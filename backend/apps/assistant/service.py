@@ -99,6 +99,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
             for a in activity
         ],
         "repository_url": repo_url,
+        "github_user": settings.GITHUB_USER,
         "github": github_context,
         "google_cloud": google_cloud_context,
         "capabilities": [
@@ -135,6 +136,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         "Answer questions about the application, connected services, integrations, and monitored infrastructure. "
         "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, repository structure, README content, languages, and code search results. You can also analyze Google Cloud billing, enabled APIs, usage, service health, cost anomalies, quotas, and recent errors from the connected Google Cloud context. "
         "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
+        "The user's own GitHub username is provided as github_user in the system state. When the user names a repository without a URL (for example 'Orbit'), treat it as their own repo and call the tool with just the repository name; do not ask for a URL. Only expect a URL when the repository clearly belongs to someone else. "
         "You can help explain external services such as hosting providers, billing plans, APIs, and configuration options when the information is available in the system state. "
         "For requests that require an action or infrastructure check, use available tools when possible. Use get_google_cloud_context for Google Cloud monitoring questions. Use get_local_git_changes for questions about the user's own local code changes, edits, or recent commits in this project. Use send_discord when the user asks to notify, post, or send a message to Discord. "
         "When calling a tool, return only JSON in this format: {\"tool\": \"tool_name\", \"arguments\": {}}. Use GitHub tools for GitHub actions instead of explaining that you cannot access GitHub. "

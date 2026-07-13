@@ -194,13 +194,24 @@ def get_deployment_details(service_id, deploy_id):
         return None
 
 def _fetch_cost(headers):
-    try:
-        r = requests.get(f"{API}/billing", headers=headers, timeout=15)
-        if r.ok:
-            return float(r.json().get("currentMonthCost", 0))
-    except requests.RequestException:
-        pass
+    # Render's public API has no billing endpoint, so the only reliable source
+    # of real spend is the RENDER_MONTHLY_COST override. Otherwise unavailable.
+    override = getattr(settings, "RENDER_MONTHLY_COST", "")
+    if override not in (None, ""):
+        try:
+            return float(override)
+        except (TypeError, ValueError):
+            log.warning("Invalid RENDER_MONTHLY_COST: %r", override)
     return None
+
+
+def _resolve_stale_billing_alerts():
+    """Clear old render-billing alerts once spend is back within budget."""
+    try:
+        from apps.monitoring.models import Alert
+        Alert.objects.filter(source="render_billing", resolved=False).update(resolved=True)
+    except Exception as e:
+        log.warning("Could not resolve stale render alerts: %s", e)
 
 
 def _finish(cost):
@@ -213,7 +224,9 @@ def _finish(cost):
         "within_expected_cost": within_budget,
     }
 
-    if not within_budget:
+    if within_budget:
+        _resolve_stale_billing_alerts()
+    else:
         metadata["issue"] = f"Render cost exceeded ${COST_THRESHOLD:.2f} limit. Current: ${cost:.2f}"
         notify(
             "warning",

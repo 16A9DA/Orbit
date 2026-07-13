@@ -132,4 +132,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")
 
 RENDER_COST_THRESHOLD = float(os.getenv("RENDER_COST_THRESHOLD", "1.62"))
+# Render's public API exposes no billing endpoint. Set the real current spend
+# here when you want it shown; blank means "unavailable".
+RENDER_MONTHLY_COST = os.getenv("RENDER_MONTHLY_COST", "")
 SCHEDULER_INTERVAL = int(os.getenv("SCHEDULER_INTERVAL", "300"))

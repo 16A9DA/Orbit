@@ -176,7 +176,7 @@ function renderBilling(services) {
 }
 
 function renderActivity(activity) {
-  const color = { render: C.amber, github: C.green, gcp: C.purple, sendgrid: C.accent };
+  const color = { render: C.amber, github: C.green, gcp: C.purple, sendgrid: C.accent, git: C.green };
   $('#activity-list').innerHTML = activity.slice(0, 8).map((a) => `
     <div class="row">
       <span class="tag" style="color:${color[a.service] || C.muted}">${esc((a.service || '').toUpperCase())}</span>
@@ -330,8 +330,9 @@ $('#notes-list').addEventListener('click', (e) => {
 });
 $('#add-note').addEventListener('click', () => {
   const id = Date.now();
-  notes.unshift({ id, title: 'Untitled', body: '', updated: id });
+  notes.unshift({ id, title: '', body: '', updated: id });
   activeNote = id; saveNotes(); renderNotes();
+  $('#note-title').focus();
 });
 function patchActive(patch) {
   const a = notes.find((n) => n.id === activeNote);

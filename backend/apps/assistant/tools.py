@@ -1,4 +1,3 @@
-
 import re
 import subprocess
 
@@ -170,6 +169,11 @@ def normalize_tool_arguments(name, arguments):
             "",
             arguments["repo"],
         ).rstrip("/")
+
+        # A bare repo name (no owner) means one of the user's own repositories.
+        repo = arguments["repo"]
+        if repo and "/" not in repo and settings.GITHUB_USER:
+            arguments["repo"] = f"{settings.GITHUB_USER}/{repo}"
 
     required_repo_tools = {
         "get_repository_context",

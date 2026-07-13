@@ -8,6 +8,7 @@ from apps.github import service as github
 from apps.google_cloud import service as gcp
 from apps.render import service as render
 from apps.sendgrid import service as sendgrid
+from apps.monitoring import git_local
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ COLLECTORS = {
     "render": render.collect,
     "gcp": gcp.collect,
     "sendgrid": sendgrid.collect,
+    "git": git_local.collect,
 }
 
 
