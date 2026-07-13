@@ -49,8 +49,31 @@ def _mock_cost():
 
 
 def _finish(cost, mock=False):
-    upsert_service("Render Billing", "render", "operational", {"monthly_cost": cost, "mock": mock})
-    if cost > settings.RENDER_COST_THRESHOLD:
-        notify("warning", f"Render monthly usage exceeded {settings.RENDER_COST_THRESHOLD}",
-               f"Current monthly cost is ${cost:.2f}.", source="render_billing")
-    return {"monthly_cost": cost, "mock": mock}
+    expected_limit = 5.68
+    within_budget = cost <= expected_limit
+    status = "operational" if within_budget else "warning"
+
+    metadata = {
+        "monthly_cost": cost,
+        "expected_monthly_cost": expected_limit,
+        "within_expected_cost": within_budget,
+        "mock": mock,
+    }
+
+    if not within_budget:
+        metadata["issue"] = f"Render cost exceeded expected $5.00 limit. Current: ${cost:.2f}"
+        notify(
+            "warning",
+            "Render cost exceeded expected limit",
+            metadata["issue"],
+            source="render_billing",
+        )
+
+    upsert_service(
+        "Render Billing",
+        "render",
+        status,
+        metadata,
+    )
+
+    return metadata
