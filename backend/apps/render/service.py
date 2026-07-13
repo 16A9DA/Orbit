@@ -33,8 +33,52 @@ def collect():
         return {"error": str(e)}
 
 
+def get_deployment_logs(service_id, deploy_id):
+    """Get logs for a Render deployment."""
+    if not settings.RENDER_API_KEY:
+        return []
+
+    headers = {
+        "Authorization": f"Bearer {settings.RENDER_API_KEY}",
+        "Accept": "application/json",
+    }
+
+    try:
+        r = requests.get(
+            f"{API}/services/{service_id}/deploys/{deploy_id}/logs",
+            headers=headers,
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data.get("logs", data if isinstance(data, list) else [])
+    except requests.RequestException as e:
+        log.warning("Render deployment logs lookup failed: %s", e)
+        return []
+
+
+def get_deployment_details(service_id, deploy_id):
+    if not settings.RENDER_API_KEY:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {settings.RENDER_API_KEY}",
+        "Accept": "application/json",
+    }
+
+    try:
+        r = requests.get(
+            f"{API}/services/{service_id}/deploys/{deploy_id}",
+            headers=headers,
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        log.warning("Render deployment details lookup failed: %s", e)
+        return None
+
 def _fetch_cost(headers):
-    # ponytail: billing endpoint varies by plan; fall back to mock figure if unavailable.
     try:
         r = requests.get(f"{API}/billing", headers=headers, timeout=15)
         if r.ok:
