@@ -262,7 +262,8 @@ def _compute_instances():
         return {"running": running, "total": len(items), "items": items}
 
     except requests.RequestException as e:
-        log.warning("Compute instances lookup failed: %s", e, exc_info=True)
+        if not _note_billing(e):
+            log.warning("Compute instances lookup failed: %s", e)
         return empty
 
 

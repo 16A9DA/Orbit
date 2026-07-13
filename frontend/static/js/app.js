@@ -264,10 +264,17 @@ $('#render-list').addEventListener('click', async (e) => {
   try {
     const data = await api(`/render/${id}/logs/`);
     const logs = data.logs || [];
-    if (data.error) { box.textContent = data.error; return; }
-    box.innerHTML = logs.length
-      ? logs.map((l) => `<div class="log-line">${esc(typeof l === 'string' ? l : (l.message || JSON.stringify(l)))}</div>`).join('')
-      : 'No logs.';
+    const deploys = data.deploys || [];
+    const deployHtml = deploys.length
+      ? '<div class="log-section">Recent deploys</div>' + deploys.map((d) =>
+          `<div class="log-line">• [${esc(d.status || '')}] ${esc(d.commit_id)} ${esc(d.commit_message || 'no commit')}</div>`).join('')
+      : '';
+    const logHtml = data.error
+      ? `<div class="log-line">${esc(data.error)}</div>`
+      : (logs.length
+          ? '<div class="log-section">Logs</div>' + logs.map((l) => `<div class="log-line">${esc(typeof l === 'string' ? l : (l.message || JSON.stringify(l)))}</div>`).join('')
+          : '<div class="log-section">Logs</div><div class="log-line">No logs.</div>');
+    box.innerHTML = deployHtml + logHtml || 'No data.';
   } catch (err) { box.textContent = `Failed: ${err.message}`; }
 });
 

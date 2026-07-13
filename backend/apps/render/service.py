@@ -83,14 +83,69 @@ def _latest_deploy(headers, service_id):
         return None
 
 
+def get_recent_deploys(service_id, limit=5):
+    """Recent deploys with commit info for a service."""
+    try:
+        r = requests.get(f"{API}/services/{service_id}/deploys?limit={int(limit)}", headers=_auth(), timeout=15)
+        r.raise_for_status()
+        out = []
+        for item in r.json():
+            d = item.get("deploy", item)
+            commit = d.get("commit") or {}
+            out.append({
+                "status": d.get("status"),
+                "created_at": d.get("createdAt"),
+                "commit_message": (commit.get("message") or "").split("\n")[0],
+                "commit_id": (commit.get("id") or "")[:7],
+            })
+        return out
+    except requests.RequestException as e:
+        log.warning("Render deploys lookup failed: %s", e)
+        return []
+
+
+def _owner_id(headers):
+    try:
+        r = requests.get(f"{API}/owners?limit=1", headers=headers, timeout=15)
+        r.raise_for_status()
+        items = r.json()
+        if items:
+            return items[0].get("owner", items[0]).get("id")
+    except requests.RequestException as e:
+        log.warning("Render owner lookup failed: %s", e)
+    return None
+
+
 def get_service_logs(service_id):
-    """Logs for a service's most recent deploy. Used by the dashboard on click."""
+    """Recent runtime logs for a service via the /v1/logs endpoint (dashboard on-click)."""
     if not settings.RENDER_API_KEY:
         return {"error": "Render API key not configured", "logs": []}
-    deploy = _latest_deploy(_auth(), service_id)
-    if not deploy or not deploy.get("id"):
-        return {"error": "No deploys found", "logs": []}
-    return {"deploy": deploy, "logs": get_deployment_logs(service_id, deploy["id"])}
+
+    deploys = get_recent_deploys(service_id)
+
+    headers = _auth()
+    owner = _owner_id(headers)
+    if not owner:
+        return {"error": "Could not resolve Render owner", "logs": [], "deploys": deploys}
+
+    try:
+        r = requests.get(
+            f"{API}/logs",
+            headers=headers,
+            params={"ownerId": owner, "resource": service_id, "limit": 50, "direction": "backward"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        entries = data.get("logs", data if isinstance(data, list) else [])
+        logs = [
+            f"{e.get('timestamp', '')} {e.get('message', '')}".strip() if isinstance(e, dict) else str(e)
+            for e in entries
+        ]
+        return {"logs": logs, "deploys": deploys}
+    except requests.RequestException as e:
+        log.warning("Render logs lookup failed: %s", e)
+        return {"error": f"Logs unavailable: {e}", "logs": [], "deploys": deploys}
 
 
 def get_deployment_logs(service_id, deploy_id):
