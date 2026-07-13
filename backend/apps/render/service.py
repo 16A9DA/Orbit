@@ -9,7 +9,7 @@ from apps.notifications.service import notify
 log = logging.getLogger(__name__)
 API = "https://api.render.com/v1"
 
-COST_THRESHOLD = 5.0
+COST_THRESHOLD = 5.68
 
 
 def _auth():
@@ -18,7 +18,8 @@ def _auth():
 
 def collect():
     if not settings.RENDER_API_KEY:
-        return _finish(_mock_cost(), mock=True)
+        upsert_service("Render", "render", "unknown", {"error": "Render API key not configured"})
+        return {"error": "Render API key not configured"}
     try:
         h = _auth()
         r = requests.get(f"{API}/services?limit=20", headers=h, timeout=15)
@@ -126,22 +127,17 @@ def _fetch_cost(headers):
             return float(r.json().get("currentMonthCost", 0))
     except requests.RequestException:
         pass
-    return _mock_cost()
+    return None
 
 
-def _mock_cost():
-    return 1.85
-
-
-def _finish(cost, mock=False):
-    within_budget = cost <= COST_THRESHOLD
+def _finish(cost):
+    within_budget = cost is None or cost <= COST_THRESHOLD
     status = "operational" if within_budget else "warning"
 
     metadata = {
         "monthly_cost": cost,
         "expected_monthly_cost": COST_THRESHOLD,
         "within_expected_cost": within_budget,
-        "mock": mock,
     }
 
     if not within_budget:
