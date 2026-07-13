@@ -8,9 +8,26 @@ PROJECT_ROOT = BASE_DIR.parent
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+
+# Secret key must be provided via .env. Only DEBUG gets a throwaway dev fallback.
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-insecure-only-do-not-use-in-production"
+    else:
+        raise RuntimeError("DJANGO_SECRET_KEY must be set when DEBUG is off.")
+
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+
+# Hardening applied automatically once DEBUG is off (production).
+if not DEBUG:
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_HTTPONLY = True
+    X_FRAME_OPTIONS = "DENY"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -93,7 +110,19 @@ RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 GCP_API_KEY = os.getenv("GCP_API_KEY", "")
 GCP_PROJECT = os.getenv("GCP_PROJECT", "")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")  # fallback / default channel
+
+# Per-channel webhooks for the Orbit server. Any blank one falls back to
+# DISCORD_WEBHOOK_URL. Create one webhook per channel in Discord:
+# Server Settings -> Integrations -> Webhooks.
+DISCORD_CHANNELS = {
+    "alerts": os.getenv("DISCORD_WEBHOOK_ALERTS", ""),
+    "security": os.getenv("DISCORD_WEBHOOK_SECURITY", ""),
+    "billing": os.getenv("DISCORD_WEBHOOK_BILLING", ""),
+    "deployments": os.getenv("DISCORD_WEBHOOK_DEPLOYMENTS", ""),
+    "logs": os.getenv("DISCORD_WEBHOOK_LOGS", ""),
+    "general": os.getenv("DISCORD_WEBHOOK_GENERAL", ""),
+}
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")

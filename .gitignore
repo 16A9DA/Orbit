@@ -36,3 +36,5 @@ db.sqlite3-journal
 .idea/
 .vscode/
 *.log
+
+graphify-out/

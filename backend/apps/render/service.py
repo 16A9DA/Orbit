@@ -53,5 +53,5 @@ def _finish(cost, mock=False):
     upsert_service("Render Billing", "render", "operational", {"monthly_cost": cost, "mock": mock})
     if cost > settings.RENDER_COST_THRESHOLD:
         notify("warning", f"Render monthly usage exceeded {settings.RENDER_COST_THRESHOLD}",
-               f"Current monthly cost is ${cost:.2f}.", source="render")
+               f"Current monthly cost is ${cost:.2f}.", source="render_billing")
     return {"monthly_cost": cost, "mock": mock}
