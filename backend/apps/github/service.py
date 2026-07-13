@@ -262,3 +262,100 @@ def get_repository_context(repo):
         "languages": get_repository_languages(repo),
         "commits": get_commit_history(repo, limit=5),
     }
+
+
+def create_issue(repo, title, body):
+    """Create a GitHub issue from an AI action."""
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        r = requests.post(
+            f"{API}/repos/{repo}/issues",
+            headers=_headers(),
+            json={
+                "title": title,
+                "body": body,
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+        issue = r.json()
+
+        log_activity(
+            "github",
+            f"Created issue #{issue.get('number')} in {repo}",
+            {
+                "repo": repo,
+                "title": title,
+                "url": issue.get("html_url"),
+            },
+        )
+
+        return {
+            "number": issue.get("number"),
+            "url": issue.get("html_url"),
+            "title": issue.get("title"),
+        }
+
+    except requests.RequestException as e:
+        log.warning("Issue creation failed: %s", e)
+        return None
+
+
+def create_branch(repo, branch, from_branch="main"):
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        ref = requests.get(
+            f"{API}/repos/{repo}/git/ref/heads/{from_branch}",
+            headers=_headers(),
+            timeout=15,
+        )
+        ref.raise_for_status()
+
+        sha = ref.json()["object"]["sha"]
+
+        r = requests.post(
+            f"{API}/repos/{repo}/git/refs",
+            headers=_headers(),
+            json={
+                "ref": f"refs/heads/{branch}",
+                "sha": sha,
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+
+        return {
+            "branch": branch,
+            "sha": sha,
+        }
+
+    except requests.RequestException as e:
+        log.warning("Branch creation failed: %s", e)
+        return None
+
+
+def comment_issue(repo, issue_number, comment):
+    if not settings.GITHUB_TOKEN:
+        return None
+
+    try:
+        r = requests.post(
+            f"{API}/repos/{repo}/issues/{issue_number}/comments",
+            headers=_headers(),
+            json={"body": comment},
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+
+        return {
+            "url": data.get("html_url"),
+        }
+
+    except requests.RequestException as e:
+        log.warning("Issue comment failed: %s", e)
+        return None
