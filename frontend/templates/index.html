@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard</title>
+  <title>Orbit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -13,155 +13,106 @@
 </head>
 
 <body>
-  <aside class="sidebar">
-    <div class="brand"><span class="brand-mark"></span> Dashboard</div>
-    <nav class="menu" id="menu">
-      <a class="menu-item active" data-view="home">Home</a>
-      <a class="menu-item" data-view="services">Services</a>
-      <a class="menu-item" data-view="alerts">Alerts</a>
-      <a class="menu-item" data-view="tasks">Tasks</a>
-      <a class="menu-item" data-view="activity">Activity</a>
-      <a class="menu-item" data-view="assistant">Assistant</a>
-    </nav>
-    <div class="sidebar-foot">Local · 127.0.0.1</div>
-  </aside>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">&gt;_</span> Orbit</div>
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="tasks">Tasks</button>
+    </div>
+    <div class="top-right">
+      <span class="now" id="now"></span>
+      <span class="status-pill"><span class="dot" id="status-dot"></span><span id="status-text">All systems operational</span></span>
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </header>
 
-  <main class="main">
-    <header class="topbar">
-      <div>
-        <h1 id="page-title">Overview</h1>
-        <p class="muted" id="page-sub">Your systems at a glance</p>
-      </div>
-      <button id="refresh" class="btn">Refresh</button>
-    </header>
-
-    <!-- HOME: widget grid -->
-    <section class="view" id="view-home">
-      <div class="widgets">
-        <button class="widget" data-view="services">
-          <div class="widget-label">Services</div>
-          <div class="widget-value" data-w="services">–</div>
-          <div class="widget-foot" id="w-services-foot">operational</div>
-        </button>
-        <button class="widget" data-view="alerts">
-          <div class="widget-label">Alerts</div>
-          <div class="widget-value" data-w="alerts">–</div>
-          <div class="widget-foot">critical + warning</div>
-        </button>
-        <button class="widget" data-view="tasks">
-          <div class="widget-label">Open Tasks</div>
-          <div class="widget-value" data-w="tasks_open">–</div>
-          <div class="widget-foot">to do</div>
-        </button>
-        <button class="widget" data-view="activity">
-          <div class="widget-label">Activity</div>
-          <div class="widget-value" data-w="activity">–</div>
-          <div class="widget-foot">recent events</div>
-        </button>
-        <button class="widget" data-view="github">
-          <div class="widget-label">GitHub</div>
-          <div class="widget-value" data-w="github">–</div>
-          <div class="widget-foot">latest commit</div>
-        </button>
-        <button class="widget accent" data-view="assistant">
-          <div class="widget-label">Assistant</div>
-          <div class="widget-value">Ask</div>
-          <div class="widget-foot">local AI</div>
-        </button>
-      </div>
-    </section>
-
-    <!-- Detail views -->
-    <section class="view hidden" id="view-services">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card">
-        <div class="svc-grid" id="service-grid"></div>
-      </div>
-    </section>
-
-    <section class="view hidden" id="view-alerts">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card">
-        <div class="rows" id="alerts-list"></div>
-      </div>
-    </section>
-
-    <section class="view hidden" id="view-tasks">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card">
-        <form class="task-form" id="task-form">
-          <input id="t-title" placeholder="New task…" autocomplete="off" required />
-          <select id="t-priority">
-            <option value="high">High</option>
-            <option value="medium" selected>Medium</option>
-            <option value="low">Low</option>
-          </select>
-          <input id="t-due" type="date" />
-          <button class="btn" type="submit">Add</button>
-        </form>
-        <div class="task-list" id="task-list"></div>
-      </div>
-    </section>
-
-    <section class="view hidden" id="view-task">
-      <button class="back" data-view="tasks">&larr; Back to tasks</button>
-      <div class="card task-detail">
-        <input id="d-title" class="d-title" />
-        <div class="d-meta">
-          <select id="d-priority">
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-          <select id="d-status">
-            <option value="todo">To do</option>
-            <option value="in_progress">In progress</option>
-            <option value="done">Done</option>
-          </select>
-          <input id="d-due" type="date" />
+  <!-- OVERVIEW -->
+  <div class="wrap tab-panel" id="panel-overview">
+    <div class="banner" id="alert-banner"></div>
+    <div class="overview" id="overview-grid">
+      <div class="col">
+        <div class="card briefing">
+          <div class="card-title">AI Briefing</div>
+          <p id="briefing">Reading your systems…</p>
         </div>
-        <textarea id="d-notes" class="d-notes" placeholder="Write inside this task…"></textarea>
-        <div class="d-actions">
-          <span class="d-saved" id="d-saved"></span>
-          <button class="btn" id="d-save">Save</button>
-        </div>
-      </div>
-    </section>
 
-    <section class="view hidden" id="view-activity">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card">
-        <div class="rows" id="activity-list"></div>
-      </div>
-    </section>
+        <div class="kpis" id="kpis"></div>
 
-    <section class="view hidden" id="view-github">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card">
-        <div class="rows" id="github-latest">
-          <div class="row">
-            <div>
-              <strong>Latest GitHub activity</strong>
-              <div class="muted">Waiting for data...</div>
-            </div>
+        <div class="svc-row">
+          <div class="card">
+            <div class="card-title">Render <span class="badge" id="render-badge">–</span></div>
+            <div class="svc-list" id="render-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">SendGrid <span class="badge" id="sendgrid-badge">–</span></div>
+            <div id="sendgrid-metrics"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">GitHub <span class="badge" id="github-badge">–</span></div>
+            <div id="github-body"></div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <section class="view hidden" id="view-assistant">
-      <button class="back" data-view="home">&larr; Back</button>
-      <div class="card chat">
-        <div class="chat-log" id="assistant-log">
-          <div class="msg bot">Ask: "Check my systems", "Any problems?", "What should I work on today?"</div>
+        <div class="card">
+          <div class="card-title">Billing — Month to date <span class="badge" id="billing-total">–</span></div>
+          <div class="stack" id="billing-stack"></div>
+          <div id="billing-rows"></div>
         </div>
-        <form class="chat-form" id="assistant-form">
-          <input id="assistant-input" placeholder="Ask the local assistant…" autocomplete="off" />
-          <button class="btn" type="submit">Send</button>
-        </form>
+
+        <div class="card">
+          <div class="card-title">Recent Activity</div>
+          <div id="activity-list"></div>
+        </div>
       </div>
-    </section>
-  </main>
+
+      <aside class="aside" id="aside">
+        <div class="card">
+          <div class="card-title">Alerts <span class="badge" id="alerts-count">0</span></div>
+          <div id="alerts-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Suggested Tasks</div>
+          <div id="suggested-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ask the Assistant</div>
+          <div class="chat-log" id="chat-log">
+            <div class="msg bot">Ask anything: "Any problems?", "What changes have I done?", "How's Render billing?"</div>
+          </div>
+          <form class="chat-form" id="chat-form">
+            <input id="chat-input" placeholder="Ask…" autocomplete="off" />
+            <button class="btn accent" type="submit">Send</button>
+          </form>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="wrap tab-panel hidden" id="panel-tasks">
+    <div class="notes-layout">
+      <div class="card">
+        <div class="card-title">Notes <span class="badge" id="note-count">0 NOTES</span></div>
+        <button class="btn" id="add-note" style="width:100%;margin-bottom:12px;">+ New note</button>
+        <div id="notes-list"></div>
+      </div>
+      <div class="col">
+        <div class="card note-editor" id="note-editor">
+          <input class="nt-title" id="note-title" placeholder="Untitled" />
+          <div class="nt-meta" id="note-meta"></div>
+          <textarea class="nt-body" id="note-body" placeholder="Write here…"></textarea>
+        </div>
+        <div class="card">
+          <div class="card-title">My Tasks</div>
+          <div class="task-add">
+            <input id="task-input" placeholder="Add a task…" autocomplete="off" />
+            <button class="btn accent" id="task-add-btn">Add</button>
+          </div>
+          <div id="mytasks-list" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="{% static 'js/app.js' %}"></script>
 </body>
