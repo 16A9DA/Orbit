@@ -15,10 +15,22 @@ from apps.github.service import (
     get_repository_tree,
 )
 from apps.google_cloud.service import collect as get_google_cloud_context
+from apps.notifications.service import send_discord_message
+
+_DISCORD_CHANNELS = {"general", "alerts", "billing", "security", "deployments"}
+
+
+def send_discord(message, channel="general"):
+    if not message:
+        return {"error": "message is required"}
+    channel = channel if channel in _DISCORD_CHANNELS else "general"
+    ok = send_discord_message(message, channel)
+    if ok:
+        return {"status": "sent", "channel": channel}
+    return {"error": f"Discord webhook for channel '{channel}' is not configured or send failed"}
 
 
 def get_local_git_changes(limit=15):
-    """Local git state of this project: what the user has changed and recent commits."""
     root = str(settings.PROJECT_ROOT)
 
     def _git(*args):
@@ -50,6 +62,7 @@ GITHUB_TOOLS = {
     "get_repository_tree": get_repository_tree,
     "get_google_cloud_context": get_google_cloud_context,
     "get_local_git_changes": get_local_git_changes,
+    "send_discord": send_discord,
 }
 
 
@@ -68,6 +81,15 @@ Use for questions like "what changes have I done", "what did I edit locally", "r
 Returns current branch, working-tree status, diff stats, and recent commit log.
 Arguments:
 {}
+
+send_discord:
+Send a message to a Discord channel when the user asks to notify, post, or send something to Discord.
+Valid channels: general, alerts, billing, security, deployments (defaults to general).
+Arguments:
+{
+    "message": "text to send",
+    "channel": "general"
+}
 
 get_repository_context:
 Analyze a GitHub repository.
