@@ -4,103 +4,97 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pulse Sentinel · Dashboard</title>
+  <title>Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
 </head>
 <body>
-  <div class="grid-glow"></div>
-
   <aside class="sidebar">
-    <div class="brand">
-      <span class="pulse-dot"></span>
-      <span class="brand-name">PULSE<br />SENTINEL</span>
-    </div>
-    <nav class="nav">
-      <a class="nav-item active" data-view="overview">Overview</a>
-      <a class="nav-item" data-view="services">Services</a>
-      <a class="nav-item" data-view="alerts">Alerts</a>
-      <a class="nav-item" data-view="tasks">Tasks</a>
-      <a class="nav-item" data-view="activity">Telemetry</a>
+    <div class="brand"><span class="brand-mark"></span> Dashboard</div>
+    <nav class="menu" id="menu">
+      <a class="menu-item active" data-view="home">Home</a>
+      <a class="menu-item" data-view="services">Services</a>
+      <a class="menu-item" data-view="alerts">Alerts</a>
+      <a class="menu-item" data-view="tasks">Tasks</a>
+      <a class="menu-item" data-view="activity">Activity</a>
+      <a class="menu-item" data-view="assistant">Assistant</a>
     </nav>
-    <div class="sidebar-foot label-mono">LOCAL · 127.0.0.1</div>
+    <div class="sidebar-foot">Local · 127.0.0.1</div>
   </aside>
 
   <main class="main">
     <header class="topbar">
       <div>
-        <h1 class="headline">Command Center</h1>
-        <p class="subtitle label-mono" id="clock">SYNCING…</p>
+        <h1 id="page-title">Overview</h1>
+        <p class="muted" id="page-sub">Your systems at a glance</p>
       </div>
-      <div class="topbar-actions">
-        <div class="stat-chip"><span class="dot ok"></span><span id="chip-services">0</span> SERVICES</div>
-        <div class="stat-chip"><span class="dot warn"></span><span id="chip-alerts">0</span> ALERTS</div>
-        <button id="refresh" class="glass-btn">Refresh</button>
-      </div>
+      <button id="refresh" class="btn">Refresh</button>
     </header>
 
-    <section class="bento">
-      <div class="card metric-card" id="m-degraded">
-        <div class="metric-label label-mono">DEGRADED SERVICES</div>
-        <div class="metric-value" data-metric="degraded">–</div>
-        <div class="spark" data-spark></div>
-        <div class="threshold ok label-mono">NOMINAL</div>
+    <!-- HOME: widget grid -->
+    <section class="view" id="view-home">
+      <div class="widgets">
+        <button class="widget" data-view="services">
+          <div class="widget-label">Services</div>
+          <div class="widget-value" data-w="services">–</div>
+          <div class="widget-foot" id="w-services-foot">operational</div>
+        </button>
+        <button class="widget" data-view="alerts">
+          <div class="widget-label">Alerts</div>
+          <div class="widget-value" data-w="alerts">–</div>
+          <div class="widget-foot">critical + warning</div>
+        </button>
+        <button class="widget" data-view="tasks">
+          <div class="widget-label">Open Tasks</div>
+          <div class="widget-value" data-w="tasks_open">–</div>
+          <div class="widget-foot">to do</div>
+        </button>
+        <button class="widget" data-view="activity">
+          <div class="widget-label">Activity</div>
+          <div class="widget-value" data-w="activity">–</div>
+          <div class="widget-foot">recent events</div>
+        </button>
+        <button class="widget accent" data-view="assistant">
+          <div class="widget-label">Assistant</div>
+          <div class="widget-value">Ask</div>
+          <div class="widget-foot">local AI</div>
+        </button>
       </div>
-      <div class="card metric-card" id="m-critical">
-        <div class="metric-label label-mono">CRITICAL ALERTS</div>
-        <div class="metric-value" data-metric="alerts_critical">–</div>
-        <div class="spark" data-spark></div>
-        <div class="threshold label-mono">THREAT LEVEL</div>
-      </div>
-      <div class="card metric-card" id="m-warning">
-        <div class="metric-label label-mono">WARNINGS</div>
-        <div class="metric-value" data-metric="alerts_warning">–</div>
-        <div class="spark" data-spark></div>
-        <div class="threshold label-mono">WATCH</div>
-      </div>
-      <div class="card metric-card" id="m-tasks">
-        <div class="metric-label label-mono">OPEN TASKS</div>
-        <div class="metric-value" data-metric="tasks_open">–</div>
-        <div class="spark" data-spark></div>
-        <div class="threshold label-mono">BACKLOG</div>
-      </div>
+    </section>
 
-      <div class="card wide" id="services-card">
-        <div class="card-head"><h2 class="card-title">Service Grid</h2></div>
-        <div class="service-grid" id="service-grid"></div>
-      </div>
+    <!-- Detail views -->
+    <section class="view hidden" id="view-services">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card"><div class="svc-grid" id="service-grid"></div></div>
+    </section>
 
-      <div class="card tall" id="assistant-card">
-        <div class="card-head"><h2 class="card-title">Sentinel AI</h2></div>
-        <div class="assistant-log" id="assistant-log">
-          <div class="ai-msg bot">Ask: "Check my systems", "Any problems?", "What should I work on?"</div>
+    <section class="view hidden" id="view-alerts">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card"><div class="rows" id="alerts-list"></div></div>
+    </section>
+
+    <section class="view hidden" id="view-tasks">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card"><div class="task-list" id="task-list"></div></div>
+    </section>
+
+    <section class="view hidden" id="view-activity">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card"><div class="rows" id="activity-list"></div></div>
+    </section>
+
+    <section class="view hidden" id="view-assistant">
+      <button class="back" data-view="home">&larr; Back</button>
+      <div class="card chat">
+        <div class="chat-log" id="assistant-log">
+          <div class="msg bot">Ask: "Check my systems", "Any problems?", "What should I work on today?"</div>
         </div>
-        <form class="assistant-form" id="assistant-form">
-          <input id="assistant-input" class="assistant-input" placeholder="Query the system…" autocomplete="off" />
-          <button class="glass-btn" type="submit">Send</button>
+        <form class="chat-form" id="assistant-form">
+          <input id="assistant-input" placeholder="Ask the local assistant…" autocomplete="off" />
+          <button class="btn" type="submit">Send</button>
         </form>
-      </div>
-
-      <div class="card wide" id="alerts-card">
-        <div class="card-head"><h2 class="card-title">Active Alerts</h2></div>
-        <div class="telemetry" id="alerts-list"></div>
-      </div>
-
-      <div class="card" id="tasks-card">
-        <div class="card-head"><h2 class="card-title">Tasks</h2></div>
-        <div class="task-list" id="task-list"></div>
-      </div>
-
-      <div class="card" id="heatmap-card">
-        <div class="card-head"><h2 class="card-title">Load Heatmap</h2></div>
-        <div class="heatmap" id="heatmap"></div>
-      </div>
-
-      <div class="card wide" id="activity-card">
-        <div class="card-head"><h2 class="card-title">Telemetry Stream</h2></div>
-        <div class="telemetry" id="activity-list"></div>
       </div>
     </section>
   </main>

@@ -7,118 +7,81 @@ async function api(path, opts) {
   return r.json();
 }
 
-function fmtTime(iso) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+const fmtTime = (iso) =>
+  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+const TITLES = {
+  home: ['Overview', 'Your systems at a glance'],
+  services: ['Services', 'Monitored infrastructure'],
+  alerts: ['Alerts', 'Active issues'],
+  tasks: ['Tasks', 'What needs doing'],
+  activity: ['Activity', 'Recent events'],
+  assistant: ['Assistant', 'Local AI over your data'],
+};
+
+function show(view) {
+  $$('.view').forEach((v) => v.classList.add('hidden'));
+  $(`#view-${view}`).classList.remove('hidden');
+  $$('.menu-item').forEach((m) => m.classList.toggle('active', m.dataset.view === view));
+  const [t, s] = TITLES[view] || TITLES.home;
+  $('#page-title').textContent = t;
+  $('#page-sub').textContent = s;
+  window.scrollTo({ top: 0 });
 }
 
-function spark(el, seed) {
-  // ponytail: no historical series yet, render a deterministic pseudo-sparkline.
-  el.innerHTML = '';
-  for (let i = 0; i < 16; i++) {
-    const b = document.createElement('span');
-    const h = 20 + ((seed * 7 + i * i * 13) % 80);
-    b.style.height = `${h}%`;
-    el.appendChild(b);
-  }
-}
+// Any element with data-view navigates (menu items, widgets, back buttons).
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-view]');
+  if (el) show(el.dataset.view);
+});
 
-function metricCards(counts) {
-  $$('[data-metric]').forEach((el) => {
-    const v = counts[el.dataset.metric] ?? 0;
-    el.textContent = v;
-  });
-  $('#m-critical').classList.toggle('hot', (counts.alerts_critical ?? 0) > 0);
-  $$('[data-spark]').forEach((el, i) => spark(el, i + 1));
+function renderWidgets(c) {
+  $('[data-w="services"]').textContent = c.services;
+  $('[data-w="alerts"]').textContent = c.alerts_critical + c.alerts_warning;
+  $('[data-w="tasks_open"]').textContent = c.tasks_open;
+  $('#w-services-foot').textContent = c.degraded ? `${c.degraded} degraded` : 'all operational';
 }
 
 function renderServices(services) {
-  const grid = $('#service-grid');
-  grid.innerHTML = services.map((s) => {
+  $('#service-grid').innerHTML = services.map((s) => {
     const meta = Object.entries(s.metadata || {})
       .filter(([k]) => !['mock', 'id', 'error'].includes(k))
-      .slice(0, 2)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(' · ');
+      .slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ');
     return `<div class="svc">
-      <div class="svc-top">
-        <span class="svc-name">${s.name}</span>
-        <span class="badge ${s.status}">${s.status}</span>
-      </div>
-      <div class="svc-meta">${meta || s.type}</div>
-    </div>`;
-  }).join('') || '<div class="svc-meta">No services yet. Hit Refresh.</div>';
+      <div class="svc-top"><span class="svc-name">${s.name}</span>
+      <span class="badge ${s.status}">${s.status}</span></div>
+      <div class="svc-meta">${meta || s.type}</div></div>`;
+  }).join('') || '<div class="svc-meta">No services. Hit Refresh.</div>';
 }
 
-function renderTelemetry(el, rows, mapper) {
-  el.innerHTML = rows.map(mapper).join('') || '<div class="svc-meta">Empty.</div>';
+function renderRows(el, rows, mapper) {
+  el.innerHTML = rows.map(mapper).join('') || '<div class="svc-meta">Nothing here.</div>';
 }
 
-function renderAlerts(alerts) {
-  renderTelemetry($('#alerts-list'), alerts, (a) => `
-    <div class="tl-row tl-sev-${a.severity}">
-      <span class="tl-time">${fmtTime(a.created_at)}</span>
-      <span class="tl-tag">${a.severity}</span>
-      <span>${a.title}</span>
-    </div>`);
-}
-
-function renderActivity(items) {
-  renderTelemetry($('#activity-list'), items, (a) => `
-    <div class="tl-row">
-      <span class="tl-time">${fmtTime(a.timestamp)}</span>
-      <span class="tl-tag">${a.service}</span>
-      <span>${a.event}</span>
-    </div>`);
-}
-
-function renderTasks(tasks) {
-  $('#task-list').innerHTML = tasks.map((t) => {
+function renderAll(data) {
+  renderWidgets(data.counts);
+  renderServices(data.services);
+  renderRows($('#alerts-list'), data.alerts, (a) => `
+    <div class="row sev-${a.severity}"><span class="row-time">${fmtTime(a.created_at)}</span>
+    <span class="row-tag">${a.severity}</span><span>${a.title}</span></div>`);
+  renderRows($('#activity-list'), data.activity, (a) => `
+    <div class="row"><span class="row-time">${fmtTime(a.timestamp)}</span>
+    <span class="row-tag">${a.service}</span><span>${a.event}</span></div>`);
+  $('#task-list').innerHTML = data.tasks.map((t) => {
     const due = t.deadline ? new Date(t.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-    return `<div class="task">
-      <span class="prio ${t.priority}"></span>
-      <span>${t.title}</span>
-      <span class="task-due label-mono">${due}</span>
-    </div>`;
+    return `<div class="task"><span class="prio ${t.priority}"></span><span>${t.title}</span>
+      <span class="task-due">${due}</span></div>`;
   }).join('') || '<div class="svc-meta">No open tasks.</div>';
 }
 
-function renderHeatmap() {
-  const hm = $('#heatmap');
-  hm.innerHTML = '';
-  for (let i = 0; i < 98; i++) {
-    const c = document.createElement('div');
-    c.className = 'hm-cell';
-    const lvl = Math.random();
-    c.style.background = `rgba(111,210,255,${(0.05 + lvl * 0.5).toFixed(2)})`;
-    hm.appendChild(c);
-  }
-}
-
 async function load() {
-  const data = await api('/summary/');
-  metricCards(data.counts);
-  $('#chip-services').textContent = data.counts.services;
-  $('#chip-alerts').textContent = data.counts.alerts_critical + data.counts.alerts_warning;
-  renderServices(data.services);
-  renderAlerts(data.alerts);
-  renderTasks(data.tasks);
-  renderActivity(data.activity);
-  renderHeatmap();
-}
-
-function clock() {
-  $('#clock').textContent = `LIVE · ${new Date().toLocaleString([], { hour12: false })}`;
+  renderAll(await api('/summary/'));
 }
 
 $('#refresh').addEventListener('click', async (e) => {
   e.target.textContent = 'Syncing…';
-  try {
-    await api('/refresh/', { method: 'POST' });
-    await load();
-  } finally {
-    e.target.textContent = 'Refresh';
-  }
+  try { await api('/refresh/', { method: 'POST' }); await load(); }
+  finally { e.target.textContent = 'Refresh'; }
 });
 
 $('#assistant-form').addEventListener('submit', async (e) => {
@@ -127,8 +90,9 @@ $('#assistant-form').addEventListener('submit', async (e) => {
   const q = input.value.trim();
   if (!q) return;
   const log = $('#assistant-log');
-  log.insertAdjacentHTML('beforeend', `<div class="ai-msg user">${q}</div>`);
+  log.insertAdjacentHTML('beforeend', `<div class="msg user">${q}</div>`);
   input.value = '';
+  log.insertAdjacentHTML('beforeend', `<div class="msg bot" id="pending">Thinking…</div>`);
   log.scrollTop = log.scrollHeight;
   try {
     const { answer } = await api('/assistant/', {
@@ -136,23 +100,13 @@ $('#assistant-form').addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: q }),
     });
-    log.insertAdjacentHTML('beforeend', `<div class="ai-msg bot">${answer}</div>`);
+    $('#pending').textContent = answer;
   } catch {
-    log.insertAdjacentHTML('beforeend', `<div class="ai-msg bot">Assistant unavailable.</div>`);
+    $('#pending').textContent = 'Assistant unavailable.';
   }
+  $('#pending').removeAttribute('id');
   log.scrollTop = log.scrollHeight;
 });
 
-$$('.nav-item').forEach((n) => n.addEventListener('click', () => {
-  $$('.nav-item').forEach((x) => x.classList.remove('active'));
-  n.classList.add('active');
-  const map = { services: '#services-card', alerts: '#alerts-card', tasks: '#tasks-card', activity: '#activity-card' };
-  const target = map[n.dataset.view];
-  if (target) $(target).scrollIntoView({ behavior: 'smooth', block: 'center' });
-  else window.scrollTo({ top: 0, behavior: 'smooth' });
-}));
-
-clock();
-setInterval(clock, 1000);
 load().catch((e) => console.error(e));
 setInterval(() => load().catch(() => {}), 30000);
