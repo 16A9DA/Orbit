@@ -121,6 +121,8 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
             "overcharge and cost-overage alerting",
             "local git changes and commit history (get_local_git_changes)",
             "sending messages to Discord channels (send_discord)",
+            "web search and page reading (web_search, web_fetch)",
+            "local git push status: unpushed and recently pushed commits",
             "Google Cloud API usage monitoring",
             "Google Cloud enabled API monitoring",
             "Google Cloud cost anomaly detection",
@@ -138,7 +140,7 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
         "The user's own GitHub username is provided as github_user in the system state. When the user names a repository without a URL (for example 'Orbit'), treat it as their own repo and call the tool with just the repository name; do not ask for a URL. Only expect a URL when the repository clearly belongs to someone else. "
         "You can help explain external services such as hosting providers, billing plans, APIs, and configuration options when the information is available in the system state. "
-        "For requests that require an action or infrastructure check, use available tools when possible. Use get_google_cloud_context for Google Cloud monitoring questions. Use get_local_git_changes for questions about the user's own local code changes, edits, or recent commits in this project. Use send_discord when the user asks to notify, post, or send a message to Discord. "
+        "For requests that require an action or infrastructure check, use available tools when possible. Use get_google_cloud_context for Google Cloud monitoring questions. Use get_local_git_changes for questions about the user's own local code changes, edits, or recent commits in this project. Use send_discord when the user asks to notify, post, or send a message to Discord. Use web_search and web_fetch when the user needs current or external information from the internet that is not in the system state. "
         "When calling a tool, return only JSON in this format: {\"tool\": \"tool_name\", \"arguments\": {}}. Use GitHub tools for GitHub actions instead of explaining that you cannot access GitHub. "
         "Available tools:\n" + TOOL_DESCRIPTION + "\n"
         "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."

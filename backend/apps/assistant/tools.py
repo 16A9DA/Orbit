@@ -41,13 +41,55 @@ def get_local_git_changes(limit=15):
         except (subprocess.SubprocessError, OSError) as e:
             return f"error: {e}"
 
+    has_upstream = _git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    upstream_ok = has_upstream and not has_upstream.startswith("error")
+
     return {
         "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
-        "status": _git("status", "--short"),
+        "upstream": has_upstream if upstream_ok else "no upstream configured",
+        "status": _git("status", "--short") or "clean",
         "diff_stat": _git("diff", "--stat"),
         "staged_diff_stat": _git("diff", "--cached", "--stat"),
         "recent_commits": _git("log", f"-{int(limit)}", "--oneline"),
+        # Commits made locally but not yet pushed to the upstream branch.
+        "unpushed_commits": (_git("log", "--oneline", "@{u}..HEAD") or "none") if upstream_ok else "no upstream",
+        # Most recent commits already on the upstream (i.e. pushed).
+        "recently_pushed": (_git("log", "--oneline", "-10", "@{u}") or "none") if upstream_ok else "no upstream",
     }
+
+
+def web_search(query, max_results=5):
+    """Search the web with DuckDuckGo and return top result snippets."""
+    if not query:
+        return {"error": "query is required"}
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=int(max_results)))
+        return {"results": [
+            {"title": r.get("title"), "url": r.get("href"), "snippet": r.get("body")}
+            for r in results
+        ]}
+    except Exception as e:
+        return {"error": f"Web search failed: {e}"}
+
+
+def web_fetch(url, max_chars=4000):
+    """Fetch a URL and return its readable text via BeautifulSoup."""
+    if not url or not url.startswith(("http://", "https://")):
+        return {"error": "a valid http(s) url is required"}
+    try:
+        import requests as _rq
+        from bs4 import BeautifulSoup
+        r = _rq.get(url, timeout=15, headers={"User-Agent": "OrbitAssistant/1.0"})
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        text = " ".join(soup.get_text(" ").split())
+        return {"url": url, "text": text[:int(max_chars)]}
+    except Exception as e:
+        return {"error": f"Fetch failed: {e}"}
 
 
 GITHUB_TOOLS = {
@@ -62,6 +104,8 @@ GITHUB_TOOLS = {
     "get_google_cloud_context": get_google_cloud_context,
     "get_local_git_changes": get_local_git_changes,
     "send_discord": send_discord,
+    "web_search": web_search,
+    "web_fetch": web_fetch,
 }
 
 
@@ -88,6 +132,22 @@ Arguments:
 {
     "message": "text to send",
     "channel": "general"
+}
+
+web_search:
+Search the web for current or external information not present in the system state.
+Use for news, docs, pricing, or anything requiring live internet data.
+Arguments:
+{
+    "query": "search terms"
+}
+
+web_fetch:
+Fetch and read the text of a specific web page URL.
+Use after web_search to read a result, or when the user gives a URL to read.
+Arguments:
+{
+    "url": "https://example.com"
 }
 
 get_repository_context:
