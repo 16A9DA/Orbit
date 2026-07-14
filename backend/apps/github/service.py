@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 
 from apps.monitoring.collector import log_activity, upsert_service
+from apps.monitoring.models import Activity
 from apps.notifications.service import notify
 
 log = logging.getLogger(__name__)
@@ -65,6 +66,58 @@ def _list_repos(limit=3):
         return []
 
 
+def _log_repo_commits(repos):
+    """Surface real commits from the active repos in Recent Activity.
+
+    The public-events feed is stale and the local-git collector only sees the
+    dashboard's own repo, so pull actual commits per top repo. Deduped by sha.
+    """
+    for repo in repos:
+        full = repo.get("full_name")
+        for c in get_commit_history(full, limit=5):
+            sha = c.get("sha") or ""
+            event = f"{sha[:7]} {c.get('message', '')} ({full})"
+            if Activity.objects.filter(service="github", event=event).exists():
+                continue
+            log_activity("github", event,
+                         {"repo": full, "sha": sha, "author": c.get("author"),
+                          "date": c.get("date"), "url": c.get("url")})
+
+
+def get_contributions(weeks=26):
+    """Daily commit-contribution counts from GitHub's GraphQL contribution calendar.
+
+    The REST API has no contribution graph; GraphQL is the only source. Returns
+    {total, days:[{date, count}]} for roughly the last `weeks` weeks.
+    """
+    if not (settings.GITHUB_TOKEN and settings.GITHUB_USER):
+        return None
+    query = (
+        "query($u:String!){user(login:$u){contributionsCollection"
+        "{contributionCalendar{totalContributions weeks{contributionDays"
+        "{date contributionCount}}}}}}"
+    )
+    try:
+        r = requests.post(
+            "https://api.github.com/graphql",
+            headers={"Authorization": f"Bearer {settings.GITHUB_TOKEN}"},
+            json={"query": query, "variables": {"u": settings.GITHUB_USER}},
+            timeout=15,
+        )
+        r.raise_for_status()
+        cal = (r.json().get("data", {}).get("user", {})
+               .get("contributionsCollection", {}).get("contributionCalendar", {}))
+        days = [
+            {"date": d["date"], "count": d["contributionCount"]}
+            for wk in cal.get("weeks", [])[-weeks:]
+            for d in wk.get("contributionDays", [])
+        ]
+        return {"total": cal.get("totalContributions", 0), "days": days}
+    except (requests.RequestException, ValueError, KeyError) as e:
+        log.warning("GitHub contributions lookup failed: %s", e)
+        return None
+
+
 def collect():
     if not (settings.GITHUB_TOKEN and settings.GITHUB_USER):
         return _mock()
@@ -117,9 +170,12 @@ def collect():
                            "A workflow run concluded with failure.", source="github")
         repos = _list_repos()
         total_commits = sum(r["commits"] for r in repos)
+        _log_repo_commits(repos)
+        contributions = get_contributions()
         upsert_service("GitHub", "github", "operational",
                        {"commits": commits, "prs": prs, "failed_actions": failed,
-                        "repos": repos, "total_commits": total_commits})
+                        "repos": repos, "total_commits": total_commits,
+                        "contributions": contributions})
         return {"commits": commits, "prs": prs, "failed_actions": failed, "repos": repos}
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:

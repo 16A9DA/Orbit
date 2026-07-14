@@ -85,7 +85,9 @@ def _route_tool(question, repo_url):
         return {"tool": "get_local_git_changes", "arguments": {}}
     web_kw = ("how do i", "how to", "how can i", "latest", "documentation",
               "docs for", "set up", "setup", "install", "what is the best",
-              "compare", "pricing for", "news")
+              "compare", "pricing for", "news", "better than", "alternative",
+              "alternatives to", " vs ", "cheaper", "recommend", "which service",
+              "free ", "is there a", "what's a good", "should i use")
     # Only reach for the web when the question isn't about a specific repo.
     if not repo_url and any(k in q for k in web_kw):
         return {"tool": "web_search", "arguments": {"query": question}}
@@ -190,7 +192,8 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
         ],
     }
     system = (
-        "You are the assistant inside a local infrastructure dashboard. "
+        "You are Orbit, the user's day-to-day developer and work assistant, living inside their infrastructure dashboard. "
+        "You help like a senior engineer: monitor their services, answer deployment and setup questions, and look things up on the internet when needed. You currently monitor their infrastructure and will connect to more tools (such as email) over time. Refer to yourself as Orbit. "
         "Answer questions about the application, connected services, integrations, and monitored infrastructure. "
         "You can answer questions about GitHub repositories, commits, pull requests, failures, deployments, repository structure, README content, languages, and code search results. You can also analyze Google Cloud billing, enabled APIs, usage, service health, cost anomalies, quotas, and recent errors from the connected Google Cloud context. "
         "If a GitHub repository URL is provided, summarize the repository using available repository context and clearly state when information is missing. "
@@ -248,14 +251,15 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
                     {
                         "role": "system",
                         "content": (
-                            "You are an AI assistant. A tool has already been executed successfully. "
-                            "Use ONLY the tool result to answer the user's original request. "
-                            "Do not mention tool execution, JSON, or internal implementation. "
-                            "If the tool result contains repository information, provide a concise summary with sections where appropriate."
+                            "You are Orbit. A tool has already run and its result is given below. "
+                            "Answer the user's request using ONLY that result, in a concise, helpful reply. "
+                            "Do not mention tools, JSON, or internal implementation."
                         ),
                     },
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": f"Tool result:\n{json.dumps(result, indent=2, default=str)}"},
+                    {
+                        "role": "user",
+                        "content": f"{question}\n\nTool result:\n{json.dumps(result, indent=2, default=str)}",
+                    },
                 ]
 
                 try:
@@ -269,11 +273,12 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
                         timeout=60,
                     )
                     summary_response.raise_for_status()
-                    return summary_response.json().get("message", {}).get("content", "").strip()
+                    summarized = summary_response.json().get("message", {}).get("content", "").strip()
                 except requests.RequestException:
-                    # Ollama unavailable for summary: return the raw tool result
-                    # so web/git lookups still work instead of vanishing.
-                    return _format_tool_result(result)
+                    summarized = ""
+                # Empty summary or Ollama failure: fall back to the raw tool result
+                # so web/git lookups always surface something.
+                return summarized or _format_tool_result(result)
         except (ValueError, TypeError):
             pass
 

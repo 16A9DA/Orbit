@@ -140,35 +140,35 @@ function renderSendgridCard(services) {
   ].join('');
 }
 
-const PIE_COLORS = ['oklch(0.62 0.16 200)', 'oklch(0.68 0.17 280)', 'oklch(0.72 0.16 145)'];
-
-// Commit-distribution pie for the top repos. Pure: repos -> SVG string.
-function pieSVG(repos) {
-  const data = repos.filter((r) => (r.commits || 0) > 0);
-  const total = data.reduce((s, r) => s + r.commits, 0);
-  if (!total) return '';
-  const R = 46, cx = 50, cy = 50;
-  let a0 = -Math.PI / 2; // start at 12 o'clock
-  const arc = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)];
-  const slices = data.map((r, i) => {
-    const frac = r.commits / total;
-    const a1 = a0 + frac * 2 * Math.PI;
-    const [x0, y0] = arc(a0), [x1, y1] = arc(a1);
-    const large = frac > 0.5 ? 1 : 0;
-    // A single full-circle slice can't be drawn as one arc; use a circle.
-    const path = frac >= 0.999
-      ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${PIE_COLORS[i % 3]}"/>`
-      : `<path d="M${cx} ${cy} L${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${PIE_COLORS[i % 3]}"/>`;
-    a0 = a1;
-    return path;
-  }).join('');
-  const legend = data.map((r, i) =>
-    `<div class="pie-leg"><span class="sw" style="background:${PIE_COLORS[i % 3]}"></span>${esc(r.name)} <span class="sub">${r.commits}</span></div>`).join('');
-  return `<div class="gh-pie"><svg viewBox="0 0 100 100" width="96" height="96">${slices}</svg><div class="pie-legend">${legend}</div></div>`;
+// GitHub-style commit heatmap. Pure: contributions -> SVG string.
+const HEAT = ['oklch(0.28 0.02 260)', 'oklch(0.45 0.12 150)', 'oklch(0.58 0.15 150)', 'oklch(0.7 0.17 150)', 'oklch(0.82 0.18 150)'];
+function heatLevel(count, max) {
+  if (!count) return 0;
+  if (max <= 1) return 4;
+  return Math.min(4, 1 + Math.floor((count / max) * 3.999));
 }
-console.assert(pieSVG([]) === '', 'empty repos -> no pie');
-console.assert(pieSVG([{ name: 'a', commits: 1 }]).includes('<circle'), 'single repo -> full circle');
-console.assert(pieSVG([{ name: 'a', commits: 1 }, { name: 'b', commits: 1 }]).includes('<path'), 'two repos -> arcs');
+function heatmapSVG(contrib) {
+  if (!contrib || !contrib.days || !contrib.days.length) return '';
+  const days = contrib.days;
+  const max = days.reduce((m, d) => Math.max(m, d.count), 0);
+  const cell = 11, gap = 2;
+  // Column per week (7 days), starting on the first day's weekday offset.
+  const first = new Date(days[0].date + 'T00:00:00');
+  const offset = first.getDay(); // 0=Sun
+  const cells = days.map((d, i) => {
+    const idx = i + offset;
+    const col = Math.floor(idx / 7), row = idx % 7;
+    const lvl = heatLevel(d.count, max);
+    return `<rect x="${col * (cell + gap)}" y="${row * (cell + gap)}" width="${cell}" height="${cell}" rx="2" fill="${HEAT[lvl]}"><title>${d.date}: ${d.count}</title></rect>`;
+  }).join('');
+  const cols = Math.ceil((days.length + offset) / 7);
+  const w = cols * (cell + gap), h = 7 * (cell + gap);
+  return `<div class="gh-heat"><div class="card-sub">${contrib.total} contributions</div>
+    <svg viewBox="0 0 ${w} ${h}" width="100%" preserveAspectRatio="xMinYMin meet" style="max-height:${h}px">${cells}</svg></div>`;
+}
+console.assert(heatmapSVG(null) === '', 'no contrib -> empty');
+console.assert(heatLevel(0, 10) === 0 && heatLevel(10, 10) === 4, 'heat levels bound');
+console.assert(heatmapSVG({ total: 5, days: [{ date: '2026-07-01', count: 3 }] }).includes('<rect'), 'renders cells');
 
 function renderGithubCard(services) {
   const gh = byType(services, 'github')[0];
@@ -186,7 +186,7 @@ function renderGithubCard(services) {
     body.innerHTML = '<div class="row"><span class="sub">No repositories.</span></div>';
     return;
   }
-  body.innerHTML = pieSVG(repos) + repos.map((r) => `
+  body.innerHTML = heatmapSVG(m.contributions) + repos.map((r) => `
     <div class="gh-repo" data-repo="${esc(r.full_name)}" style="cursor:pointer">
       <span>${esc(r.name)}${r.private ? ' <span class="sub">·private</span>' : ''}</span>
       <span class="c">${r.commits} commits</span>
