@@ -92,6 +92,29 @@ def web_fetch(url, max_chars=4000):
         return {"error": f"Fetch failed: {e}"}
 
 
+def web_answer(query, pages=2):
+    """Search the web and read the top pages so answers are grounded in real content.
+
+    Composes web_search (ddgs) + web_fetch (BeautifulSoup): returns the result
+    snippets plus the extracted text of the top `pages` results.
+    """
+    if not query:
+        return {"error": "query is required"}
+    search = web_search(query, max_results=5)
+    if search.get("error"):
+        return search
+    results = search.get("results", [])
+    sources = []
+    for r in results[:int(pages)]:
+        url = r.get("url")
+        if not url:
+            continue
+        fetched = web_fetch(url, max_chars=3000)
+        sources.append({"title": r.get("title"), "url": url,
+                        "text": fetched.get("text") or fetched.get("error", "")})
+    return {"query": query, "results": results, "sources": sources}
+
+
 GITHUB_TOOLS = {
     "create_issue": create_issue,
     "create_branch": create_branch,
@@ -106,6 +129,7 @@ GITHUB_TOOLS = {
     "send_discord": send_discord,
     "web_search": web_search,
     "web_fetch": web_fetch,
+    "web_answer": web_answer,
 }
 
 
@@ -134,9 +158,18 @@ Arguments:
     "channel": "general"
 }
 
+web_answer:
+Search the web AND read the top pages, so the answer is grounded in real page
+content, not just snippets. Prefer this for any question needing live internet
+info: comparisons, recommendations, "how to", pricing, alternatives, current facts.
+Arguments:
+{
+    "query": "what to look up"
+}
+
 web_search:
 Search the web for current or external information not present in the system state.
-Use for news, docs, pricing, or anything requiring live internet data.
+Returns result snippets only (use web_answer to also read the pages).
 Arguments:
 {
     "query": "search terms"

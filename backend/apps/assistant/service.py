@@ -90,7 +90,7 @@ def _route_tool(question, repo_url):
               "free ", "is there a", "what's a good", "should i use")
     # Only reach for the web when the question isn't about a specific repo.
     if not repo_url and any(k in q for k in web_kw):
-        return {"tool": "web_search", "arguments": {"query": question}}
+        return {"tool": "web_answer", "arguments": {"query": question}}
     return None
 
 
@@ -253,6 +253,11 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
                         "content": (
                             "You are Orbit. A tool has already run and its result is given below. "
                             "Answer the user's request using ONLY that result, in a concise, helpful reply. "
+                            "Ground every factual claim in the provided sources. Do not invent facts, "
+                            "numbers, or features not present in the result. If the sources disagree or "
+                            "do not confirm something, say so plainly instead of guessing. "
+                            "When the result contains web sources, cite the source URLs you used at the "
+                            "end under a 'Sources:' line so the user can verify. "
                             "Do not mention tools, JSON, or internal implementation."
                         ),
                     },
@@ -278,7 +283,8 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
                     summarized = ""
                 # Empty summary or Ollama failure: fall back to the raw tool result
                 # so web/git lookups always surface something.
-                return summarized or _format_tool_result(result)
+                answer = summarized or _format_tool_result(result)
+                return _append_sources(answer, result)
         except (ValueError, TypeError):
             pass
 
@@ -288,8 +294,23 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
         return None
 
 
+def _append_sources(answer, result):
+    """Guarantee verifiable source links on web answers, even if the model omits them."""
+    if not isinstance(result, dict):
+        return answer
+    urls = [s.get("url") for s in result.get("sources", []) if s.get("url")]
+    if not urls or "Sources:" in answer:
+        return answer
+    return answer + "\n\nSources:\n" + "\n".join(f"- {u}" for u in urls)
+
+
 def _format_tool_result(result):
     """Readable fallback rendering of a tool result when no model can summarize."""
+    if isinstance(result, dict) and result.get("sources"):
+        lines = ["From the web:"]
+        for s in result["sources"]:
+            lines.append(f"- {s.get('title')} ({s.get('url')})\n  {(s.get('text') or '')[:300]}")
+        return "\n".join(lines)
     if isinstance(result, dict) and result.get("results"):
         lines = ["Top results:"]
         for r in result["results"][:5]:
