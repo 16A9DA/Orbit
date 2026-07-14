@@ -72,6 +72,7 @@ def _log_repo_commits(repos):
     The public-events feed is stale and the local-git collector only sees the
     dashboard's own repo, so pull actual commits per top repo. Deduped by sha.
     """
+    fresh = []
     for repo in repos:
         full = repo.get("full_name")
         for c in get_commit_history(full, limit=5):
@@ -82,6 +83,12 @@ def _log_repo_commits(repos):
             log_activity("github", event,
                          {"repo": full, "sha": sha, "author": c.get("author"),
                           "date": c.get("date"), "url": c.get("url")})
+            fresh.append(event)
+    # Push notification for new commits, one commit per line.
+    if fresh:
+        notify("info", f"{len(fresh)} new commit(s)",
+               "\n".join(f"- {e}" for e in fresh),
+               source="github", channel="deployments", discord=True, make_alert=False)
 
 
 def get_contributions(weeks=26):

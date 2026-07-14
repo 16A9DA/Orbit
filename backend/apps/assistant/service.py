@@ -59,7 +59,7 @@ def snapshot():
 def ask(question, history=None):
     services, alerts, tasks, activity = snapshot()
 
-    action_result = _handle_actions(question)
+    action_result = _handle_actions(question, history, services, alerts, tasks, activity)
     if action_result:
         return action_result
 
@@ -94,29 +94,52 @@ def _route_tool(question, repo_url):
     return None
 
 
-def _handle_actions(question):
+def _handle_actions(question, history=None, services=None, alerts=None, tasks=None, activity=None):
     q = question.lower()
 
-    discord_keywords = (
-        "send to discord",
-        "send on discord",
-        "post to discord",
-        "message discord",
-    )
+    if not (("discord" in q) and any(k in q for k in ("send", "post", "message", "share"))):
+        return None
 
-    if any(keyword in q for keyword in discord_keywords):
-        message = question
+    content = _resolve_discord_content(q, history, alerts, tasks, activity)
+    if content is None:
+        # Fall back to sending the literal message minus the command wrapper.
+        content = re.sub(r"(?i)\b(send|post|share|message)\b|\bto discord\b|\bon discord\b|\bdiscord\b|\bme\b|\bthe\b", "", question).strip()
+        content = content or question
 
-        success = send_discord_message(
-            message,
-            channel="general",
-        )
+    channel = _discord_channel_for(q)
+    if send_discord_message(content, channel=channel):
+        return f"Sent to Discord {channel} channel."
+    return "I could not send the Discord message. Check the Discord webhook configuration."
 
-        if success:
-            return "Message sent to Discord general channel."
 
-        return "I could not send the Discord message. Check the Discord webhook configuration."
+def _discord_channel_for(q):
+    if "billing" in q or "cost" in q:
+        return "billing"
+    if any(k in q for k in ("deploy", "push", "commit")):
+        return "deployments"
+    if any(k in q for k in ("security", "leak")):
+        return "security"
+    if any(k in q for k in ("alert", "error", "problem", "issue")):
+        return "alerts"
+    return "general"
 
+
+def _resolve_discord_content(q, history, alerts, tasks, activity):
+    """Figure out WHAT the user wants sent to Discord. None -> use raw text."""
+    if any(k in q for k in ("answer", "response", "reply", "that", "last", "previous", "you provided", "you said")):
+        for m in reversed(history or []):
+            if m.get("role") == "assistant" and m.get("content"):
+                return m["content"]
+        return "No previous answer to send."
+    if "activity" in q:
+        items = [f"- {a.service}: {a.event}" for a in (activity or [])[:15]]
+        return "Recent activity:\n" + ("\n".join(items) if items else "No recent activity.")
+    if any(k in q for k in ("alert", "problem", "issue")):
+        items = [f"- [{a.severity}] {a.title}" for a in (alerts or [])]
+        return "Open alerts:\n" + ("\n".join(items) if items else "No open alerts.")
+    if any(k in q for k in ("task", "todo")):
+        items = [f"- [{t.priority}] {t.title}" for t in (tasks or [])]
+        return "Open tasks:\n" + ("\n".join(items) if items else "No open tasks.")
     return None
 
 
@@ -202,7 +225,8 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
         "For requests that require an action or infrastructure check, use available tools when possible. Use get_google_cloud_context for Google Cloud monitoring questions. Use get_local_git_changes for questions about the user's own local code changes, edits, or recent commits in this project. Use send_discord when the user asks to notify, post, or send a message to Discord. Use web_search and web_fetch when the user needs current or external information from the internet that is not in the system state. "
         "When calling a tool, return only JSON in this format: {\"tool\": \"tool_name\", \"arguments\": {}}. Use GitHub tools for GitHub actions instead of explaining that you cannot access GitHub. "
         "Available tools:\n" + TOOL_DESCRIPTION + "\n"
-        "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."
+        "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble. "
+        "Format every list with each item on its own line as a markdown '- ' bullet; never run list items together inline with commas."
     )
     prompt = f"System state:\n{context}\n\nUser: {question}"
     # Prior turns give the model follow-up context ("summarize it", "that repo").
