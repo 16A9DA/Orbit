@@ -135,4 +135,9 @@ RENDER_COST_THRESHOLD = float(os.getenv("RENDER_COST_THRESHOLD", "1.62"))
 # Render's public API exposes no billing endpoint. Set the real current spend
 # here when you want it shown; blank means "unavailable".
 RENDER_MONTHLY_COST = os.getenv("RENDER_MONTHLY_COST", "")
+# Session bearer token from an authenticated dashboard.render.com session
+# (browser devtools -> a graphql request -> Authorization header). Lets Orbit
+# read the real "month to date" total the public API does not expose. Expires
+# periodically; blank falls back to RENDER_MONTHLY_COST.
+RENDER_SESSION_TOKEN = os.getenv("RENDER_SESSION_TOKEN", "")
 SCHEDULER_INTERVAL = int(os.getenv("SCHEDULER_INTERVAL", "300"))

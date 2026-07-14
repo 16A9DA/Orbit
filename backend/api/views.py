@@ -69,10 +69,17 @@ def assistant(request):
     question = request.data.get("question", "").strip()
     if not question:
         return Response({"error": "question required"}, status=400)
-    return Response({"answer": ask(question)})
+    history = request.data.get("history") or []
+    return Response({"answer": ask(question, history=history)})
 
 
 @api_view(["GET"])
 def render_logs(request, service_id):
     from apps.render.service import get_service_logs
     return Response(get_service_logs(service_id))
+
+
+@api_view(["POST"])
+def render_deploy(request, service_id):
+    from apps.render.service import trigger_deploy
+    return Response(trigger_deploy(service_id))

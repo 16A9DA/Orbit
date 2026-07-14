@@ -15,6 +15,39 @@ from apps.assistant.tools import execute_tool, TOOL_DESCRIPTION
 log = logging.getLogger(__name__)
 
 
+def _extract_json(text):
+    """Pull the first balanced {...} object out of a model reply and parse it.
+
+    The 3B model often wraps its tool-call JSON in prose; a bare json.loads on
+    the whole string then fails. Scanning for the first balanced object recovers
+    the tool call regardless of surrounding text.
+    """
+    if not text:
+        return None
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i + 1])
+                except ValueError:
+                    return None
+    return None
+
+
+def _demo_extract_json():
+    assert _extract_json('{"tool": "x", "arguments": {}}')["tool"] == "x"
+    assert _extract_json('Sure! {"tool": "web_search"} done')["tool"] == "web_search"
+    assert _extract_json('no json here') is None
+    assert _extract_json('') is None
+
+
 def snapshot():
     services = list(Service.objects.all())
     alerts = list(Alert.objects.filter(resolved=False))
@@ -23,7 +56,7 @@ def snapshot():
     return services, alerts, tasks, activity
 
 
-def ask(question):
+def ask(question, history=None):
     services, alerts, tasks, activity = snapshot()
 
     action_result = _handle_actions(question)
@@ -31,10 +64,32 @@ def ask(question):
         return action_result
 
     repo_url = _extract_repo_url(question)
-    answer = _ask_ollama(question, services, alerts, tasks, activity, repo_url)
+    forced = _route_tool(question, repo_url)
+    answer = _ask_ollama(question, services, alerts, tasks, activity, repo_url,
+                         history=history, forced=forced)
     if answer:
         return answer
     return _rule_based(question, services, alerts, tasks)
+
+
+def _route_tool(question, repo_url):
+    """Deterministic tool pick for cases the small model routes unreliably.
+
+    Returns {"tool": name, "arguments": {...}} to force, or None to let the
+    model decide.
+    """
+    q = question.lower()
+    git_kw = ("what changes", "what did i", "my changes", "uncommitted",
+              "recent commits", "local git", "what have i done", "edited locally")
+    if any(k in q for k in git_kw):
+        return {"tool": "get_local_git_changes", "arguments": {}}
+    web_kw = ("how do i", "how to", "how can i", "latest", "documentation",
+              "docs for", "set up", "setup", "install", "what is the best",
+              "compare", "pricing for", "news")
+    # Only reach for the web when the question isn't about a specific repo.
+    if not repo_url and any(k in q for k in web_kw):
+        return {"tool": "web_search", "arguments": {"query": question}}
+    return None
 
 
 def _handle_actions(question):
@@ -68,7 +123,8 @@ def _extract_repo_url(question):
     return match.group(0).rstrip("/.") if match else None
 
 
-def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
+def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None,
+                history=None, forced=None):
     github_context = None
     repo_name = None
 
@@ -146,24 +202,31 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
         "Do not invent data, pricing, plans, or actions that have not been provided. If information is unavailable, say so clearly. No preamble."
     )
     prompt = f"System state:\n{context}\n\nUser: {question}"
+    # Prior turns give the model follow-up context ("summarize it", "that repo").
+    prior = [m for m in (history or []) if m.get("role") in ("user", "assistant")][-6:]
     try:
-        r = requests.post(
-            f"{settings.OLLAMA_HOST}/api/chat",
-            json={
-                "model": settings.OLLAMA_MODEL,
-                "stream": False,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ],
-            },
-            timeout=60,
-        )
-        r.raise_for_status()
-        response = r.json().get("message", {}).get("content", "").strip()
+        if forced and forced.get("tool"):
+            # Skip the routing model call; force the chosen tool directly.
+            response = json.dumps(forced)
+        else:
+            r = requests.post(
+                f"{settings.OLLAMA_HOST}/api/chat",
+                json={
+                    "model": settings.OLLAMA_MODEL,
+                    "stream": False,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        *prior,
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+                timeout=60,
+            )
+            r.raise_for_status()
+            response = r.json().get("message", {}).get("content", "").strip()
 
         try:
-            tool_request = json.loads(response)
+            tool_request = _extract_json(response) or {}
             if tool_request.get("tool"):
                 arguments = tool_request.get("arguments") or {}
 
@@ -195,17 +258,22 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
                     {"role": "assistant", "content": f"Tool result:\n{json.dumps(result, indent=2, default=str)}"},
                 ]
 
-                summary_response = requests.post(
-                    f"{settings.OLLAMA_HOST}/api/chat",
-                    json={
-                        "model": settings.OLLAMA_MODEL,
-                        "stream": False,
-                        "messages": summary_messages,
-                    },
-                    timeout=60,
-                )
-                summary_response.raise_for_status()
-                return summary_response.json().get("message", {}).get("content", "").strip()
+                try:
+                    summary_response = requests.post(
+                        f"{settings.OLLAMA_HOST}/api/chat",
+                        json={
+                            "model": settings.OLLAMA_MODEL,
+                            "stream": False,
+                            "messages": summary_messages,
+                        },
+                        timeout=60,
+                    )
+                    summary_response.raise_for_status()
+                    return summary_response.json().get("message", {}).get("content", "").strip()
+                except requests.RequestException:
+                    # Ollama unavailable for summary: return the raw tool result
+                    # so web/git lookups still work instead of vanishing.
+                    return _format_tool_result(result)
         except (ValueError, TypeError):
             pass
 
@@ -213,6 +281,18 @@ def _ask_ollama(question, services, alerts, tasks, activity, repo_url=None):
     except requests.RequestException as e:
         log.warning("Ollama assistant unavailable, using rule-based: %s", e)
         return None
+
+
+def _format_tool_result(result):
+    """Readable fallback rendering of a tool result when no model can summarize."""
+    if isinstance(result, dict) and result.get("results"):
+        lines = ["Top results:"]
+        for r in result["results"][:5]:
+            lines.append(f"- {r.get('title')}: {r.get('snippet') or ''}\n  {r.get('url')}")
+        return "\n".join(lines)
+    if isinstance(result, dict):
+        return json.dumps(result, indent=2, default=str)
+    return str(result)
 
 
 def _rule_based(question, services, alerts, tasks):

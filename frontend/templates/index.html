@@ -92,25 +92,15 @@
   <div class="wrap tab-panel hidden" id="panel-tasks">
     <div class="notes-layout">
       <div class="card">
-        <div class="card-title">Notes <span class="badge" id="note-count">0 NOTES</span></div>
-        <button class="btn" id="add-note" style="width:100%;margin-bottom:12px;">+ New note</button>
-        <div id="notes-list"></div>
+        <div class="card-title">Tasks <span class="badge" id="note-count">0</span></div>
+        <div class="task-add">
+          <input id="task-input" placeholder="Add a task…" autocomplete="off" />
+          <button class="btn accent" id="task-add-btn">Add</button>
+        </div>
+        <div id="notes-list" style="margin-top:12px;"></div>
       </div>
       <div class="col">
-        <div class="card note-editor" id="note-editor">
-          <input class="nt-title" id="note-title" placeholder="Untitled" />
-          <div class="nt-meta" id="note-meta"></div>
-          <textarea class="nt-body" id="note-body" placeholder="Write here…"></textarea>
-        </div>
-        <div class="card">
-          <div class="card-title">My Tasks</div>
-          <div class="task-add">
-            <input id="task-input" placeholder="Add a task…" autocomplete="off" />
-            <button class="btn accent" id="task-add-btn">Add</button>
-          </div>
-          <div id="mytasks-list" style="margin-top:12px;"></div>
-        </div>
-        <div class="card note-editor hidden" id="task-editor">
+        <div class="card note-editor" id="task-editor">
           <input class="nt-title" id="task-title" placeholder="Task title" />
           <div class="nt-meta" id="task-meta"></div>
           <textarea class="nt-body" id="task-body" placeholder="Task details…"></textarea>

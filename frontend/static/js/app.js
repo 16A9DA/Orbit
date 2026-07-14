@@ -106,6 +106,7 @@ function renderRenderCard(services) {
         <span class="s-dot" style="background:${dotColor(s.status)}"></span>
         <span class="s-name">${esc(s.name)}</span>
         <span class="s-detail">${esc(dep)}</span>
+        <button class="btn tiny" data-deploy="${esc(m.id)}" title="Deploy latest commit">Deploy</button>
       </div><div class="svc-logs hidden" data-logs-for="${esc(m.id)}"></div>`;
   }).join('') || '<div class="row"><span class="sub">No Render apps.</span></div>';
 }
@@ -139,6 +140,36 @@ function renderSendgridCard(services) {
   ].join('');
 }
 
+const PIE_COLORS = ['oklch(0.62 0.16 200)', 'oklch(0.68 0.17 280)', 'oklch(0.72 0.16 145)'];
+
+// Commit-distribution pie for the top repos. Pure: repos -> SVG string.
+function pieSVG(repos) {
+  const data = repos.filter((r) => (r.commits || 0) > 0);
+  const total = data.reduce((s, r) => s + r.commits, 0);
+  if (!total) return '';
+  const R = 46, cx = 50, cy = 50;
+  let a0 = -Math.PI / 2; // start at 12 o'clock
+  const arc = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  const slices = data.map((r, i) => {
+    const frac = r.commits / total;
+    const a1 = a0 + frac * 2 * Math.PI;
+    const [x0, y0] = arc(a0), [x1, y1] = arc(a1);
+    const large = frac > 0.5 ? 1 : 0;
+    // A single full-circle slice can't be drawn as one arc; use a circle.
+    const path = frac >= 0.999
+      ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${PIE_COLORS[i % 3]}"/>`
+      : `<path d="M${cx} ${cy} L${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${PIE_COLORS[i % 3]}"/>`;
+    a0 = a1;
+    return path;
+  }).join('');
+  const legend = data.map((r, i) =>
+    `<div class="pie-leg"><span class="sw" style="background:${PIE_COLORS[i % 3]}"></span>${esc(r.name)} <span class="sub">${r.commits}</span></div>`).join('');
+  return `<div class="gh-pie"><svg viewBox="0 0 100 100" width="96" height="96">${slices}</svg><div class="pie-legend">${legend}</div></div>`;
+}
+console.assert(pieSVG([]) === '', 'empty repos -> no pie');
+console.assert(pieSVG([{ name: 'a', commits: 1 }]).includes('<circle'), 'single repo -> full circle');
+console.assert(pieSVG([{ name: 'a', commits: 1 }, { name: 'b', commits: 1 }]).includes('<path'), 'two repos -> arcs');
+
 function renderGithubCard(services) {
   const gh = byType(services, 'github')[0];
   const badge = $('#github-badge');
@@ -155,7 +186,7 @@ function renderGithubCard(services) {
     body.innerHTML = '<div class="row"><span class="sub">No repositories.</span></div>';
     return;
   }
-  body.innerHTML = repos.map((r) => `
+  body.innerHTML = pieSVG(repos) + repos.map((r) => `
     <div class="gh-repo" data-repo="${esc(r.full_name)}" style="cursor:pointer">
       <span>${esc(r.name)}${r.private ? ' <span class="sub">·private</span>' : ''}</span>
       <span class="c">${r.commits} commits</span>
@@ -227,10 +258,11 @@ function renderSuggested(tasks) {
 }
 
 function renderMyTasks(tasks) {
-  $('#mytasks-list').innerHTML = tasks.map((t) => `
-    <div class="check">
+  $('#note-count').textContent = tasks.length;
+  $('#notes-list').innerHTML = tasks.map((t) => `
+    <div class="check ${String(t.id) === String(activeTask) ? 'active' : ''}">
       <span class="box ${isDone(t) ? 'done' : ''}" data-toggle="${t.id}">${isDone(t) ? '✓' : ''}</span>
-      <span class="txt ${isDone(t) ? 'done' : ''}" data-open="${t.id}" style="cursor:pointer">${esc(t.title)}${t.notes ? ' <span class="sub">·notes</span>' : ''}</span>
+      <span class="txt ${isDone(t) ? 'done' : ''}" data-open="${t.id}" style="cursor:pointer">${esc(t.title || 'Untitled')}${t.notes ? ' <span class="sub">·notes</span>' : ''}</span>
       <span class="x" data-del="${t.id}">×</span>
     </div>`).join('') || '<div class="row"><span class="sub">No tasks yet.</span></div>';
 }
@@ -301,6 +333,19 @@ $('#task-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('
 
 // ---- Render app logs (click) ----
 $('#render-list').addEventListener('click', async (e) => {
+  const deployBtn = e.target.closest('[data-deploy]');
+  if (deployBtn) {
+    e.stopPropagation();
+    const id = deployBtn.dataset.deploy;
+    if (!confirm('Deploy the latest commit for this service?')) return;
+    deployBtn.disabled = true; deployBtn.textContent = 'Deploying…';
+    try {
+      const res = await api(`/render/${id}/deploy/`, { method: 'POST' });
+      deployBtn.textContent = res.error ? 'Failed' : (res.status || 'Queued');
+    } catch (err) { deployBtn.textContent = 'Failed'; }
+    setTimeout(() => { deployBtn.disabled = false; deployBtn.textContent = 'Deploy'; }, 4000);
+    return;
+  }
   const item = e.target.closest('[data-render-id]');
   if (!item) return;
   const id = item.dataset.renderId;
@@ -339,60 +384,15 @@ $('#chat-form').addEventListener('submit', async (e) => {
   pending.className = 'msg bot'; pending.textContent = 'Thinking…';
   log.appendChild(pending); log.scrollTop = log.scrollHeight;
   try {
-    const data = await api('/assistant/', { method: 'POST', body: JSON.stringify({ question: q }) });
-    pending.textContent = data.answer || 'No answer.';
+    const data = await api('/assistant/', { method: 'POST', body: JSON.stringify({ question: q, history: CHAT }) });
+    const answer = data.answer || 'No answer.';
+    pending.textContent = answer;
+    CHAT.push({ role: 'user', content: q }, { role: 'assistant', content: answer });
+    if (CHAT.length > 12) CHAT.splice(0, CHAT.length - 12);
   } catch (err) { pending.textContent = `Error: ${err.message}`; }
   log.scrollTop = log.scrollHeight;
 });
-
-// ---- Notes (localStorage) ----
-const NOTES_KEY = 'orbit_notes';
-let notes = JSON.parse(localStorage.getItem(NOTES_KEY) || 'null') || [
-  { id: 1, title: 'Standup', body: '', updated: Date.now() },
-];
-let activeNote = notes[0] ? notes[0].id : null;
-const saveNotes = () => localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-
-function renderNotes() {
-  $('#note-count').textContent = `${notes.length} NOTE${notes.length === 1 ? '' : 'S'}`;
-  $('#notes-list').innerHTML = notes.map((n) => `
-    <div class="note-item ${n.id === activeNote ? 'active' : ''}" data-note="${n.id}">
-      <div class="nt">${esc(n.title || 'Untitled')}<span class="x" data-note-del="${n.id}">×</span></div>
-      <div class="np">${esc(n.body ? n.body.slice(0, 60) : 'No content')}</div>
-    </div>`).join('') || '<div class="row"><span class="sub">No notes.</span></div>';
-  const a = notes.find((n) => n.id === activeNote);
-  $('#note-title').value = a ? a.title : '';
-  $('#note-body').value = a ? a.body : '';
-  $('#note-meta').textContent = a ? `Edited ${fmtTime(a.updated)}` : '';
-}
-$('#notes-list').addEventListener('click', (e) => {
-  const del = e.target.closest('[data-note-del]');
-  if (del) {
-    e.stopPropagation();
-    notes = notes.filter((n) => String(n.id) !== del.dataset.noteDel);
-    if (String(activeNote) === del.dataset.noteDel) activeNote = notes[0] ? notes[0].id : null;
-    saveNotes(); renderNotes(); return;
-  }
-  const item = e.target.closest('[data-note]');
-  if (item) { activeNote = Number(item.dataset.note); renderNotes(); }
-});
-$('#add-note').addEventListener('click', () => {
-  const id = Date.now();
-  notes.unshift({ id, title: '', body: '', updated: id });
-  activeNote = id; saveNotes(); renderNotes();
-  $('#note-title').focus();
-});
-function patchActive(patch) {
-  const a = notes.find((n) => n.id === activeNote);
-  if (!a) return;
-  Object.assign(a, patch, { updated: Date.now() });
-  saveNotes();
-  $('#note-count').textContent = `${notes.length} NOTE${notes.length === 1 ? '' : 'S'}`;
-  const row = $(`[data-note="${a.id}"]`);
-  if (row) { row.querySelector('.nt').firstChild.textContent = a.title || 'Untitled'; row.querySelector('.np').textContent = a.body ? a.body.slice(0, 60) : 'No content'; }
-}
-$('#note-title').addEventListener('input', (e) => patchActive({ title: e.target.value }));
-$('#note-body').addEventListener('input', (e) => patchActive({ body: e.target.value }));
+const CHAT = [];
 
 // ---- Briefing ----
 function renderBriefing(services, counts, alerts) {
@@ -424,7 +424,6 @@ async function load() {
   renderAlerts(alerts || []);
   renderSuggested(TASKS);
   renderMyTasks(TASKS);
-  renderNotes();
 }
 
 $('#refresh').addEventListener('click', async () => {
@@ -436,5 +435,6 @@ $('#refresh').addEventListener('click', async () => {
 
 tickClock();
 setInterval(tickClock, 30000);
-renderNotes();
 load().catch((e) => { $('#briefing').textContent = `Failed to load: ${e.message}`; });
+// Live refresh: re-pull summary so Recent Activity and everything else stays current.
+setInterval(() => load().catch(() => {}), 30000);

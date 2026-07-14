@@ -104,6 +104,28 @@ def get_recent_deploys(service_id, limit=5):
         return []
 
 
+def trigger_deploy(service_id):
+    """Deploy the latest commit for a Render service."""
+    if not settings.RENDER_API_KEY:
+        return {"error": "Render API key not configured"}
+    try:
+        r = requests.post(
+            f"{API}/services/{service_id}/deploys",
+            headers=_auth(),
+            json={"clearCache": "do_not_clear"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        d = r.json()
+        d = d.get("deploy", d)
+        log_activity("render", f"Triggered deploy for service {service_id}",
+                     {"deploy_id": d.get("id"), "status": d.get("status")})
+        return {"id": d.get("id"), "status": d.get("status")}
+    except requests.RequestException as e:
+        log.warning("Render deploy trigger failed: %s", e)
+        return {"error": str(e)}
+
+
 def _owner_id(headers):
     try:
         r = requests.get(f"{API}/owners?limit=1", headers=headers, timeout=15)
@@ -193,9 +215,69 @@ def get_deployment_details(service_id, deploy_id):
         log.warning("Render deployment details lookup failed: %s", e)
         return None
 
+GRAPHQL = "https://api.render.com/graphql"
+
+
+def _scrape_month_to_date():
+    """Read the real 'month to date' total from dashboard.render.com's GraphQL API.
+
+    The public REST API has no billing endpoint. The dashboard SPA reads spend
+    through GraphQL using a session bearer token (distinct from the rnd_ API
+    key). This is inherently fragile: the token expires and Render can change
+    the schema. Any failure returns None so the caller falls back cleanly.
+    """
+    token = getattr(settings, "RENDER_SESSION_TOKEN", "")
+    if not token:
+        return None
+    # Render's billing query. Field names may shift; adjust from the billing
+    # page Network tab if this stops returning a number.
+    query = "query { costForActiveUser }"
+    try:
+        r = requests.post(
+            GRAPHQL,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"query": query},
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json().get("data") or {}
+        val = _first_number(data)
+        if val is None:
+            log.warning("Render billing scrape returned no number: %s", r.text[:200])
+        return val
+    except (requests.RequestException, ValueError) as e:
+        log.warning("Render billing scrape failed: %s", e)
+        return None
+
+
+def _first_number(obj):
+    """Pull the first numeric value out of a (possibly nested) GraphQL response.
+
+    Render bills in cents in some fields; values >= 1000 with no decimal are
+    treated as cents and divided by 100.
+    """
+    if isinstance(obj, bool):
+        return None
+    if isinstance(obj, (int, float)):
+        return round(obj / 100, 2) if obj >= 1000 and float(obj).is_integer() else float(obj)
+    if isinstance(obj, dict):
+        for v in obj.values():
+            n = _first_number(v)
+            if n is not None:
+                return n
+    if isinstance(obj, list):
+        for v in obj:
+            n = _first_number(v)
+            if n is not None:
+                return n
+    return None
+
+
 def _fetch_cost():
-    # Render's public API has no billing endpoint, so the only reliable source
-    # of real spend is the RENDER_MONTHLY_COST override. Otherwise unavailable.
+    scraped = _scrape_month_to_date()
+    if scraped is not None:
+        return scraped
+    # Fallback: manual override when no session token / scrape fails.
     override = getattr(settings, "RENDER_MONTHLY_COST", "")
     if override not in (None, ""):
         try:
@@ -203,6 +285,14 @@ def _fetch_cost():
         except (TypeError, ValueError):
             log.warning("Invalid RENDER_MONTHLY_COST: %r", override)
     return None
+
+
+def _demo_first_number():
+    assert _first_number({"a": {"b": 12.5}}) == 12.5
+    assert _first_number({"cents": 5680}) == 56.80  # >=1000 int -> cents
+    assert _first_number({"x": None, "y": [{"z": 3.0}]}) == 3.0
+    assert _first_number({"flag": True, "n": 7.0}) == 7.0
+    assert _first_number({}) is None
 
 
 def _resolve_stale_billing_alerts():

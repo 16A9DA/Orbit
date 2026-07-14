@@ -661,3 +661,41 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* Deploy button in the Render service row */
+.btn.tiny {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  margin-left: 8px;
+}
+
+/* Commit-distribution pie in the GitHub card */
+.gh-pie {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pie-leg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pie-leg .sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
