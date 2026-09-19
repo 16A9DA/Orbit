@@ -8,8 +8,6 @@ Orbit is a local first personal command center. It monitors infrastructure, clou
 
 [![Orbit demo video](brag.jpg)](brag.mp4)
 
-[Watch the demo video](brag.mp4) (download `brag.mp4` from the repository and open it locally; GitHub does not stream video inline).
-
 ## Architecture
 
 The backend uses Django and Django REST Framework, with SQLite for development and PostgreSQL planned for later. A background scheduler polls each integration.
