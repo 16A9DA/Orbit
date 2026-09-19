@@ -39,3 +39,5 @@ db.sqlite3-journal
 *.log
 
 graphify-out/
+
+brag-output/
