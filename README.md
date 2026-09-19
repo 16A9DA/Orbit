@@ -6,7 +6,7 @@ Orbit is a local first personal command center. It monitors infrastructure, clou
 
 ## Demo
 
-[![Orbit demo video](brag.jpg)](brag.mp4)
+[![Orbit demo video]](brag.mp4)
 
 ## Architecture
 
