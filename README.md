@@ -2,15 +2,21 @@
 
 ## Overview
 
-Local first personal command center. Monitors infrastructure, cloud services, dev activity, tasks, alerts. Bundled AI assistant. Runs local, opens browser auto. NOC style glassmorphism UI per `DESIGN.md`.
+Orbit is a local first personal command center. It monitors infrastructure, cloud services, dev activity, tasks, and alerts, and includes a bundled AI assistant. It runs locally and opens your browser automatically. The interface follows a NOC style glassmorphism design documented in `DESIGN.md`.
+
+## Demo
+
+[![Orbit demo video](brag.jpg)](brag.mp4)
+
+[Watch the demo video](brag.mp4) (download `brag.mp4` from the repository and open it locally; GitHub does not stream video inline).
 
 ## Architecture
 
-Backend: Django, Django REST Framework, SQLite (dev), PostgreSQL (later). Background scheduler polls integrations.
+The backend uses Django and Django REST Framework, with SQLite for development and PostgreSQL planned for later. A background scheduler polls each integration.
 
-Integrations: GitHub, Render, Google Cloud, SendGrid, Notion. Notifications via Discord webhook plus in app.
+Supported integrations include GitHub, Render, Google Cloud, SendGrid, and Notion. Notifications are delivered through a Discord webhook and shown in the app itself.
 
-Frontend: single page served by Django, styled per `DESIGN.md`.
+The frontend is a single page served by Django, styled according to `DESIGN.md`.
 
 ## Install
 
@@ -25,13 +31,13 @@ python manage.py migrate
 
 ## Usage
 
-Start server. Browser opens auto at `http://127.0.0.1:8000`.
+Start the server. Your browser opens automatically at `http://127.0.0.1:8000`.
 
 ```
 dashboard
 ```
 
-Or:
+Or run it directly:
 
 ```
 python manage.py runserver
@@ -39,8 +45,8 @@ python manage.py runserver
 
 ## Configuration
 
-All secrets live in `.env`. Never commit. See `.env.example` for keys. No key present means that integration serves mock data.
+All secrets live in `.env`, which should never be committed. See `.env.example` for the full list of keys. If a key is missing, that integration falls back to mock data.
 
 ## Security
 
-Keys read from `.env` only. Stored tokens encrypted at rest. All data stays local. User owns everything.
+Keys are read from `.env` only, and stored tokens are encrypted at rest. All data stays local, and you own it.
